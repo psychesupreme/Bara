@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../config/api_config.dart';
 import '../services/sync_manager.dart';
 import '../services/field_operations_adapter.dart';
@@ -196,13 +198,37 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       return;
     }
 
+    final double liveLat = _currentPosition?.latitude ?? outlet['lat'] as double;
+    final double liveLng = _currentPosition?.longitude ?? outlet['lng'] as double;
+
     final activity = _adapter.checkInOutlet(
       clientUuid: 'UUID-${DateTime.now().millisecondsSinceEpoch}',
       customerId: outlet['id'] as String,
       outletName: outlet['name'] as String,
-      latitude: _currentPosition?.latitude ?? outlet['lat'] as double,
-      longitude: _currentPosition?.longitude ?? outlet['lng'] as double,
+      latitude: liveLat,
+      longitude: liveLng,
     );
+
+    // Asynchronously send live GPS coordinates to backend /api/v1/field/check-in for WebSocket telemetry broadcast
+    http.post(
+      Uri.parse('${ApiConfig.baseUrl}/field/check-in'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${widget.token}',
+        'X-Tenant': ApiConfig.defaultTenant,
+      },
+      body: jsonEncode({
+        'customer_id': outlet['id'],
+        'outlet_name': outlet['name'],
+        'latitude': liveLat,
+        'longitude': liveLng,
+      }),
+    ).then((res) {
+      if (res.statusCode == 200) {
+        debugPrint('Live GPS Telemetry Broadcast Succeeded!');
+      }
+    }).catchError((_) {});
 
     setState(() {
       outlet['status'] = 'Checked In (Active Visit)';

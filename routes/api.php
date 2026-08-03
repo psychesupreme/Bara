@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\ActivityExceptionController;
+use App\Http\Controllers\Api\V1\CheckInOutletController;
 use App\Http\Controllers\Api\V1\CollectionController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\FieldLocationController;
@@ -37,6 +38,9 @@ Route::middleware([InitializeTenancyByHeaderOrDomain::class, EnsureDeviceNotRevo
         Route::get('/user', function (Request $request) {
             return $request->user();
         });
+
+        // Field Operations Check-in & GPS Telemetry Broadcast Route
+        Route::post('/field/check-in', [CheckInOutletController::class, 'checkIn']);
 
         // Collaboration & System Utilities Routes (Phase 9: Module 4)
         Route::get('/utilities/calendar', [SystemUtilityController::class, 'unifiedCalendar']);

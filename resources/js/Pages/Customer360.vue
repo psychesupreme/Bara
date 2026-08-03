@@ -52,20 +52,29 @@
 
       <!-- 7-Tier Price Waterfall Precedence Inspector -->
       <div class="glass-panel p-6 space-y-4">
-        <h3 class="font-heading font-bold text-lg text-white flex items-center gap-2">
-          <span>🏷️</span>
-          7-Tier Price Waterfall Engine Inspector (CP-005 / CP-006)
-        </h3>
+        <div class="flex items-center justify-between">
+          <h3 class="font-heading font-bold text-lg text-white flex items-center gap-2">
+            <span>🏷️</span>
+            7-Tier Price Waterfall Engine Inspector (CP-005 / CP-006)
+          </h3>
+          <span class="text-xs text-indigo-400 font-mono bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-500/20">Precedence Engine Active</span>
+        </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div v-for="(tier, idx) in priceWaterfall" :key="idx" :class="['p-4 rounded-xl border transition', tier.applied ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/10 opacity-60']">
-            <div class="flex justify-between items-center text-xs">
-              <span class="font-mono text-gray-400">Tier {{ tier.level }}: {{ tier.name }}</span>
-              <span v-if="tier.applied" class="text-emerald-400 font-bold">APPLIED</span>
-              <span v-else class="text-gray-500">Skipped</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div v-for="(tier, idx) in priceWaterfall" :key="idx" :class="['p-3.5 rounded-xl border transition flex flex-col justify-between', tier.applied ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/10 opacity-60']">
+            <div>
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="font-mono text-gray-400 font-bold">Tier {{ tier.level }}</span>
+                <span v-if="tier.applied" class="text-emerald-400 font-bold text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded">APPLIED</span>
+                <span v-else class="text-gray-500 text-[10px]">Skipped</span>
+              </div>
+              <div class="text-xs font-semibold text-gray-200 line-clamp-1">{{ tier.name }}</div>
             </div>
-            <div class="text-lg font-heading font-bold text-white mt-1">{{ tier.price }}</div>
-            <div class="text-xs text-gray-400 mt-1 truncate">{{ tier.ruleRef }}</div>
+
+            <div class="mt-2">
+              <div class="text-base font-heading font-bold text-white">{{ tier.price }}</div>
+              <div class="text-[10px] font-mono text-gray-400 truncate mt-0.5">{{ tier.ruleRef }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -147,7 +156,10 @@ const priceWaterfall = ref([
   { level: 1, name: 'Base Price', price: 'KES 150.00', ruleRef: 'PR-BASE-SFJ', applied: false },
   { level: 2, name: 'Country Tier', price: 'KES 148.00', ruleRef: 'PR-CTRY-KE', applied: false },
   { level: 3, name: 'Structure Tier', price: 'KES 145.00', ruleRef: 'PR-STR-NRB', applied: false },
-  { level: 4, name: 'Channel Tier (Key Account)', price: 'KES 140.00', ruleRef: 'PR-CHN-KA', applied: true },
+  { level: 4, name: 'Channel Tier', price: 'KES 140.00', ruleRef: 'PR-CHN-KA', applied: true },
+  { level: 5, name: 'Volume Tier', price: 'KES 135.00', ruleRef: 'PR-VOL-TIER2', applied: true },
+  { level: 6, name: 'Promo Discount', price: 'KES 130.00', ruleRef: 'PR-PROMO-NRB', applied: true },
+  { level: 7, name: 'Customer Net', price: 'KES 124.80', ruleRef: 'PR-CUST-NAIVAS', applied: true },
 ]);
 
 const customerOrders = ref([
