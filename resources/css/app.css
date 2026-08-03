@@ -1,0 +1,120 @@
+/* BARA Master Design System - Modern Glassmorphism & High-Aesthetic Dark Theme */
+@import "tailwindcss";
+
+:root {
+    --font-heading: 'Outfit', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    
+    --bg-main: #0B0F19;
+    --bg-card: rgba(17, 24, 39, 0.75);
+    --bg-card-hover: rgba(31, 41, 55, 0.85);
+    --border-color: rgba(255, 255, 255, 0.08);
+    
+    --accent-primary: #6366F1;
+    --accent-secondary: #EC4899;
+    --accent-cyan: #06B6D4;
+    --accent-emerald: #10B981;
+    --accent-amber: #F59E0B;
+    --accent-rose: #F43F5E;
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--bg-main);
+    color: #F3F4F6;
+    overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: var(--font-heading);
+}
+
+/* Global SVG Boundaries & Constraints */
+svg {
+    display: inline-block;
+    vertical-align: middle;
+    max-width: 100%;
+    max-height: 100%;
+    flex-shrink: 0;
+}
+
+/* Glassmorphism Cards & Panels */
+.glass-panel {
+    background: rgba(17, 24, 39, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    border-radius: 1rem;
+}
+
+.glass-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0.75rem;
+}
+
+.glass-card:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.3);
+}
+
+/* Gradient Accents */
+.text-gradient-purple {
+    background: linear-gradient(135deg, #818CF8 0%, #C084FC 50%, #F472B6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-cyan {
+    background: linear-gradient(135deg, #38BDF8 0%, #818CF8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.btn-gradient {
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+    box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-gradient:hover {
+    background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+    box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.55);
+    transform: translateY(-1px);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(11, 15, 25, 0.5);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.5);
+}
+
+/* Leaflet Dark Map Overrides */
+.leaflet-container {
+    background: #0F172A !important;
+    border-radius: 0.75rem;
+}
+.leaflet-popup-content-wrapper {
+    background: #1E293B !important;
+    color: #F8FAFC !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+.leaflet-popup-tip {
+    background: #1E293B !important;
+}

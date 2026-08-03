@@ -1,0 +1,215 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "BARA Master Field Operations & SFA API Specification",
+    "description": "Exhaustive OpenAPI 3.0 documentation covering all 14 operational modules specified in BARA PRD v3.0 Master Specification.",
+    "version": "3.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Local Staging Server"
+    },
+    {
+      "url": "https://api.bara.app/api/v1",
+      "description": "Production API Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Sanctum Token"
+      },
+      "tenantHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Tenant"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": [],
+      "tenantHeader": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check Endpoint",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "System Healthy",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "healthy",
+                  "system": "BARA Platform Core",
+                  "version": "3.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user": {
+      "get": {
+        "summary": "Get Authenticated User Context",
+        "responses": {
+          "200": {
+            "description": "User Context Profile",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "u101",
+                  "name": "Central Field Rep (CBD)",
+                  "email": "nairobi.rep1@bara.app",
+                  "role": "rep"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sfa/customer-360/{customer}": {
+      "get": {
+        "summary": "Customer 360 Aggregator Context",
+        "parameters": [
+          {
+            "name": "customer",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified Customer Profile",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "customer": {
+                      "name": "Naivas Supermarket CBD Branch",
+                      "code": "CUST-NAI-001"
+                    },
+                    "commercial_details": {
+                      "credit_limit": 500000
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sfa/orders/create": {
+      "post": {
+        "summary": "Create Sales Order & Apply Waterfall Price",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "customer_id": "c202",
+                "lines": [
+                  {
+                    "product_id": "p101",
+                    "quantity": 10,
+                    "unit_price": 150.0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sales Order Created"
+          }
+        }
+      }
+    },
+    "/collections/capture": {
+      "post": {
+        "summary": "Capture Field Collection",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "customer_id": "c201",
+                "amount": 25000,
+                "payment_mode": "cash",
+                "currency": "KES"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Collection Recorded"
+          }
+        }
+      }
+    },
+    "/sync/push-logs": {
+      "post": {
+        "summary": "Batch Push Offline Isar DB Logs (Chunk max 50)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "logs": [
+                  {
+                    "client_uuid": "e473a79e-9f39-408d-bccf-7bbeb38913b1",
+                    "sequence": 1,
+                    "entity_type": "activity",
+                    "payload": {
+                      "reference_no": "ACT-SYNC-001",
+                      "status": "completed"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logs Processed"
+          }
+        }
+      }
+    },
+    "/sync/pull-deltas": {
+      "get": {
+        "summary": "Pull Incremental Server Deltas",
+        "parameters": [
+          {
+            "name": "last_synced_sequence",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deltas Returned"
+          }
+        }
+      }
+    }
+  }
+}

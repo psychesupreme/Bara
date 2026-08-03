@@ -1,0 +1,169 @@
+{
+  "info": {
+    "name": "BARA Platform Master API Collection (v3.0)",
+    "description": "Postman v2.1 collection covering Sanctum Auth, Activity Engine, SFA, Collections, HR, Payroll, and System Utilities.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1"
+    },
+    {
+      "key": "token",
+      "value": "sanctum_bearer_token_here"
+    },
+    {
+      "key": "tenant_id",
+      "value": "tenant1"
+    }
+  ],
+  "item": [
+    {
+      "name": "System & Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user",
+              "host": ["{{base_url}}"],
+              "path": ["user"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SFA & Commercial Execution",
+      "item": [
+        {
+          "name": "Customer 360 Aggregator",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant", "value": "{{tenant_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sfa/customer-360/CUST-NAI-001",
+              "host": ["{{base_url}}"],
+              "path": ["sfa", "customer-360", "CUST-NAI-001"]
+            }
+          }
+        },
+        {
+          "name": "Create Sales Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant", "value": "{{tenant_id}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"CUST-NAI-002\",\n  \"lines\": [\n    {\n      \"product_id\": \"prod_juice_1l\",\n      \"quantity\": 10,\n      \"unit_price\": 150.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sfa/orders/create",
+              "host": ["{{base_url}}"],
+              "path": ["sfa", "orders", "create"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Field Collections",
+      "item": [
+        {
+          "name": "Capture Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant", "value": "{{tenant_id}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"CUST-NAI-001\",\n  \"amount\": 25000.00,\n  \"payment_mode\": \"cash\",\n  \"currency\": \"KES\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/collections/capture",
+              "host": ["{{base_url}}"],
+              "path": ["collections", "capture"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Offline Sync Engine",
+      "item": [
+        {
+          "name": "Push Offline Logs (Batch max 50)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant", "value": "{{tenant_id}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logs\": [\n    {\n      \"client_uuid\": \"e473a79e-9f39-408d-bccf-7bbeb38913b1\",\n      \"sequence\": 1,\n      \"entity_type\": \"activity\",\n      \"payload\": {\n        \"reference_no\": \"ACT-SYNC-001\",\n        \"activity_type\": \"visit\",\n        \"title\": \"Nairobi CBD Check-in\",\n        \"status\": \"completed\"\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/push-logs",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "push-logs"]
+            }
+          }
+        },
+        {
+          "name": "Pull Server Deltas",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant", "value": "{{tenant_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sync/pull-deltas?last_synced_sequence=0",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "pull-deltas"],
+              "query": [
+                { "key": "last_synced_sequence", "value": "0" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

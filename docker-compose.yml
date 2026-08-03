@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bara-platform-app:latest
+    container_name: bara_app
+    restart: unless-stopped
+    environment:
+      CONTAINER_ROLE: app
+    volumes:
+      - .:/var/www
+    depends_on:
+      - db
+      - redis
+    networks:
+      - bara_network
+
+  web:
+    image: nginx:1.25-alpine
+    container_name: bara_web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - app
+      - reverb
+    networks:
+      - bara_network
+
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bara_reverb
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    volumes:
+      - .:/var/www
+    depends_on:
+      - app
+      - redis
+    networks:
+      - bara_network
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bara_queue
+    restart: unless-stopped
+    command: php artisan queue:work redis --tries=3 --timeout=90
+    volumes:
+      - .:/var/www
+    depends_on:
+      - app
+      - redis
+    networks:
+      - bara_network
+
+  db:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: bara_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-bara_prod}
+      POSTGRES_USER: ${DB_USERNAME:-bara_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-SecretProdPass2026!}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bara_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: bara_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bara_network
+
+networks:
+  bara_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
