@@ -11,6 +11,8 @@ class IsarActivity {
   String status;
   String? customerId;
   String? outcomeCode;
+  double? latitude;
+  double? longitude;
   bool isSynced;
   DateTime createdAt;
 
@@ -24,9 +26,11 @@ class IsarActivity {
     required this.status,
     this.customerId,
     this.outcomeCode,
+    this.latitude,
+    this.longitude,
     this.isSynced = false,
     DateTime? createdAt,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toSyncPayload() {
     return {
@@ -38,6 +42,8 @@ class IsarActivity {
       'status': status,
       'customer_id': customerId,
       'outcome_code': outcomeCode,
+      'latitude': latitude,
+      'longitude': longitude,
     };
   }
 }
@@ -89,10 +95,10 @@ class IsarSalesOrder {
     required this.customerId,
     required this.totalAmount,
     required this.status,
-    this.isOfflineCaptured = true,
+    required this.isOfflineCaptured,
     this.isSynced = false,
     DateTime? createdAt,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toSyncPayload() {
     return {
@@ -128,7 +134,7 @@ class IsarMerchObservation {
     this.evidencePhotoUrl,
     this.isSynced = false,
     DateTime? createdAt,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toSyncPayload() {
     return {

@@ -9,7 +9,7 @@ class FieldOperationsAdapter {
 
   FieldOperationsAdapter({required this.syncManager});
 
-  /// Offline Visit Check-in
+  /// Offline Visit Check-in with live GPS coordinates
   IsarActivity checkInOutlet({
     required String clientUuid,
     required String customerId,
@@ -26,6 +26,8 @@ class FieldOperationsAdapter {
       title: 'Store Check-in: $outletName',
       status: 'in_progress',
       customerId: customerId,
+      latitude: latitude,
+      longitude: longitude,
       isSynced: false,
     );
 

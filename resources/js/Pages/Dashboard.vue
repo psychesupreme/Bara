@@ -8,6 +8,10 @@
           <p class="text-sm text-gray-400">Real-time GPS tracking, active route operations, and field activity stream.</p>
         </div>
         <div class="flex items-center gap-3">
+          <button @click="clearTelemetryPins" class="px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-sm font-medium transition text-rose-300 flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            Clear Pins
+          </button>
           <button @click="refreshTelemetry" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition text-gray-300 flex items-center gap-2">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Refresh Telemetry
@@ -104,6 +108,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import L from 'leaflet';
 
 let mapInstance = null;
+const repMarkersMap = {};
 
 const activityLogs = ref([
   { user: 'Central Field Rep (CBD)', action: 'Check-in: Naivas Supermarket CBD Branch', location: 'CBD Zone (-1.2833, 36.8166)', time: '10:40:15 AM', lat: -1.2833300, lng: 36.8166700 },
@@ -112,33 +117,51 @@ const activityLogs = ref([
   { user: 'Central Field Rep (CBD)', action: 'Completed Visit: CBD Convenience Store', location: 'CBD Zone (-1.2845, 36.8210)', time: '10:15:02 AM', lat: -1.2845000, lng: 36.8210000 },
 ]);
 
-const addTelemetryMarker = (lat, lng, repName, outletName, timestamp) => {
+const addTelemetryMarker = (repId, lat, lng, repName, outletName, timestamp) => {
   if (!mapInstance) return;
 
-  const marker = L.circleMarker([lat, lng], {
-    color: '#EC4899',
-    fillColor: '#F43F5E',
-    fillOpacity: 0.9,
-    radius: 11,
-  }).addTo(mapInstance);
-
-  marker.bindPopup(`
+  const popupContent = `
     <div style="font-family: Inter, sans-serif; padding: 4px;">
       <b style="color: #818CF8; font-size: 14px;">${repName}</b><br/>
       <span style="color: #F8FAFC; font-weight: 600;">${outletName}</span><br/>
       <span style="color: #10B981; font-size: 11px;">📍 Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}</span><br/>
       <span style="color: #94A3B8; font-size: 10px;">Time: ${timestamp}</span>
     </div>
-  `).openPopup();
+  `;
 
-  // Auto-center map on new check-in telemetry pin
+  if (repMarkersMap[repId]) {
+    repMarkersMap[repId].setLatLng([lat, lng]);
+    repMarkersMap[repId].setPopupContent(popupContent);
+    repMarkersMap[repId].openPopup();
+  } else {
+    const marker = L.circleMarker([lat, lng], {
+      color: '#EC4899',
+      fillColor: '#F43F5E',
+      fillOpacity: 0.9,
+      radius: 11,
+    }).addTo(mapInstance);
+
+    marker.bindPopup(popupContent).openPopup();
+    repMarkersMap[repId] = marker;
+  }
+
+  // Auto-center map on updated rep location pin
   mapInstance.setView([lat, lng], 14, { animate: true });
+};
+
+const clearTelemetryPins = () => {
+  if (!mapInstance) return;
+  Object.keys(repMarkersMap).forEach((id) => {
+    mapInstance.removeLayer(repMarkersMap[id]);
+    delete repMarkersMap[id];
+  });
 };
 
 const refreshTelemetry = () => {
   const timeStr = new Date().toLocaleTimeString();
   const sampleLat = -1.28333 + (Math.random() - 0.5) * 0.02;
   const sampleLng = 36.81667 + (Math.random() - 0.5) * 0.02;
+  const repId = 'REP-CBD-001';
   const repName = 'Central Field Rep (CBD)';
   const outletName = 'Naivas Supermarket CBD Branch';
 
@@ -151,7 +174,7 @@ const refreshTelemetry = () => {
     lng: sampleLng,
   });
 
-  addTelemetryMarker(sampleLat, sampleLng, repName, outletName, timeStr);
+  addTelemetryMarker(repId, sampleLat, sampleLng, repName, outletName, timeStr);
 };
 
 onMounted(() => {
@@ -183,13 +206,7 @@ onMounted(() => {
   });
 
   // Rep Initial Live GPS Pin
-  L.circleMarker([-1.2835000, 36.8170000], {
-    color: '#EC4899',
-    fillColor: '#F43F5E',
-    fillOpacity: 0.9,
-    radius: 10,
-  }).addTo(mapInstance)
-    .bindPopup('<b>Central Field Rep (CBD)</b><br>On Shift | Active GPS');
+  addTelemetryMarker('REP-CBD-001', -1.2835000, 36.8170000, 'Central Field Rep (CBD)', 'On Shift | Active GPS', new Date().toLocaleTimeString());
 
   // WebSocket Listener if Reverb/Echo is active
   if (typeof window !== 'undefined' && window.Echo) {
@@ -198,6 +215,7 @@ onMounted(() => {
         const timeStr = new Date().toLocaleTimeString();
         const lat = e.latitude || -1.28333;
         const lng = e.longitude || 36.81667;
+        const repId = e.rep_id || 'REP-CBD-001';
         const repName = e.rep_name || 'Central Field Rep (CBD)';
         const outletName = e.outlet_name || 'Naivas Supermarket CBD Branch';
 
@@ -210,7 +228,7 @@ onMounted(() => {
           lng,
         });
 
-        addTelemetryMarker(lat, lng, repName, outletName, timeStr);
+        addTelemetryMarker(repId, lat, lng, repName, outletName, timeStr);
       });
   }
 });

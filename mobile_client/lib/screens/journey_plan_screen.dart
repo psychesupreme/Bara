@@ -5,6 +5,7 @@ import '../services/sync_manager.dart';
 import '../services/field_operations_adapter.dart';
 import 'order_entry_screen.dart';
 import 'collection_screen.dart';
+import 'sync_center_screen.dart';
 
 class JourneyPlanScreen extends StatefulWidget {
   final String token;
@@ -17,6 +18,7 @@ class JourneyPlanScreen extends StatefulWidget {
 }
 
 class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
+  late final SyncManager _syncManager;
   late final FieldOperationsAdapter _adapter;
   Position? _currentPosition;
   bool _isLocating = false;
@@ -65,12 +67,12 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   @override
   void initState() {
     super.initState();
-    final syncManager = SyncManager(
+    _syncManager = SyncManager(
       baseUrl: ApiConfig.baseUrl,
       authToken: widget.token,
       tenantHeader: ApiConfig.defaultTenant,
     );
-    _adapter = FieldOperationsAdapter(syncManager: syncManager);
+    _adapter = FieldOperationsAdapter(syncManager: _syncManager);
     _fetchRealTimeLocation();
   }
 
@@ -223,6 +225,21 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
         title: const Text('Nairobi Journey Plan'),
         backgroundColor: const Color(0xFF0F172A),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync, color: Colors.cyanAccent),
+            tooltip: 'Visual Sync Center',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SyncCenterScreen(
+                    token: widget.token,
+                    syncManager: _syncManager,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: _isLocating
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
