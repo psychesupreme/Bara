@@ -26,8 +26,17 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   bool _isLocating = false;
   String _statusMessage = 'Call Cycle Loaded | Select an outlet to verify geofence';
 
-  // Seeded Outlets for Nairobi Central Route
+  // Seeded Outlets for Nairobi Route (includes Kasarani Live Test Store at -1.2002, 36.8344)
   final List<Map<String, dynamic>> _outlets = [
+    {
+      'id': 'CUST-KASARANI-LIVE',
+      'name': 'Kasarani Live Test Store',
+      'territory': 'Kasarani Zone',
+      'lat': -1.2002000,
+      'lng': 36.8344000,
+      'status': 'Pending Visit',
+      'distanceMeters': null,
+    },
     {
       'id': 'CUST-NAIVAS-CBD',
       'name': 'Naivas Supermarket CBD Branch',
@@ -254,6 +263,20 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     );
   }
 
+  void _checkoutOutlet(Map<String, dynamic> outlet) {
+    setState(() {
+      outlet['status'] = 'Visit Completed';
+      _statusMessage = 'Check-out completed for ${outlet['name']}';
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Visit Completed: ${outlet['name']}'),
+        backgroundColor: const Color(0xFF6366F1),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -358,15 +381,18 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                   final outlet = _outlets[index];
                   final int? distance = outlet['distanceMeters'];
                   final bool isCheckedIn = outlet['status'].toString().contains('Checked In');
+                  final bool isCompleted = outlet['status'].toString().contains('Completed');
                   final bool isInRange = distance != null && distance <= 1500;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isCheckedIn ? Colors.green.withValues(alpha: 0.1) : const Color(0xFF1E293B),
+                      color: isCheckedIn
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : (isCompleted ? Colors.blueGrey.withValues(alpha: 0.1) : const Color(0xFF1E293B)),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isCheckedIn ? Colors.green : Colors.white10),
+                      border: Border.all(color: isCheckedIn ? Colors.green : (isCompleted ? Colors.blueGrey : Colors.white10)),
                     ),
                     child: Column(
                       children: [
@@ -374,8 +400,8 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              isCheckedIn ? Icons.check_circle : Icons.storefront,
-                              color: isCheckedIn ? Colors.greenAccent : (isInRange ? Colors.indigoAccent : Colors.grey),
+                              isCheckedIn ? Icons.check_circle : (isCompleted ? Icons.task_alt : Icons.storefront),
+                              color: isCheckedIn ? Colors.greenAccent : (isCompleted ? Colors.blueGrey : (isInRange ? Colors.indigoAccent : Colors.grey)),
                               size: 32,
                             ),
                             const SizedBox(width: 14),
@@ -406,24 +432,24 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton(
-                              onPressed: isCheckedIn
+                              onPressed: (isCheckedIn || isCompleted)
                                   ? null
                                   : (isInRange
                                       ? () => _performOutletCheckIn(outlet)
                                       : () => _showGeofenceAlert(outlet, distance)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: isCheckedIn
-                                    ? Colors.grey[700]
-                                    : (isInRange ? const Color(0xFF6366F1) : const Color(0xFF334155)),
+                                    ? Colors.green[800]
+                                    : (isCompleted ? Colors.grey[700] : (isInRange ? const Color(0xFF6366F1) : const Color(0xFF334155))),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               child: Text(
                                 isCheckedIn
                                     ? 'Visit Active'
-                                    : (isInRange ? 'Check In' : 'Out of Range'),
+                                    : (isCompleted ? 'Completed' : (isInRange ? 'Check In' : 'Out of Range')),
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isCheckedIn
+                                  color: (isCheckedIn || isCompleted)
                                       ? Colors.white54
                                       : (isInRange ? Colors.white : Colors.amberAccent),
                                   fontWeight: FontWeight.bold,
@@ -432,56 +458,101 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                             ),
                           ],
                         ),
+
+                        // Prominent Visit Action Menu Grid (Visible when Checked In)
                         if (isCheckedIn) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           const Divider(color: Colors.white10),
                           const SizedBox(height: 8),
-                          Row(
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Outlet Visit Action Menu',
+                              style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+
+                          Column(
                             children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => OrderEntryScreen(
-                                          token: widget.token,
-                                          customerId: outlet['id'] as String,
-                                          outletName: outlet['name'] as String,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.add_shopping_cart, size: 16, color: Colors.indigoAccent),
-                                  label: const Text('Order Entry', style: TextStyle(color: Colors.indigoAccent, fontSize: 12)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.indigoAccent),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              Row(
+                                children: [
+                                  // Module 3: Order Entry Action Card
+                                  Expanded(
+                                    child: _actionCard(
+                                      title: '🛒 Order Entry',
+                                      subtitle: '7-Tier Waterfall Cart',
+                                      color: const Color(0xFF6366F1),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => OrderEntryScreen(
+                                              token: widget.token,
+                                              customerId: outlet['id'] as String,
+                                              outletName: outlet['name'] as String,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 8),
+
+                                  // Module 4: Collection & M-Pesa STK Push Action Card
+                                  Expanded(
+                                    child: _actionCard(
+                                      title: '💳 Record Collection',
+                                      subtitle: 'M-Pesa STK Push',
+                                      color: const Color(0xFF10B981),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => CollectionScreen(
+                                              token: widget.token,
+                                              customerId: outlet['id'] as String,
+                                              outletName: outlet['name'] as String,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => CollectionScreen(
-                                          token: widget.token,
-                                          customerId: outlet['id'] as String,
-                                          outletName: outlet['name'] as String,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.payments, size: 16, color: Colors.greenAccent),
-                                  label: const Text('Collection', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.greenAccent),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              const SizedBox(height: 8),
+
+                              Row(
+                                children: [
+                                  // Merchandising / MSL Audit Card
+                                  Expanded(
+                                    child: _actionCard(
+                                      title: '📸 Merchandising',
+                                      subtitle: 'MSL & Shelf Audit',
+                                      color: const Color(0xFFEC4899),
+                                      onTap: () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('MSL & Share of Shelf Survey Recorded!'),
+                                            backgroundColor: Color(0xFFEC4899),
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 8),
+
+                                  // Complete Visit Action Card
+                                  Expanded(
+                                    child: _actionCard(
+                                      title: '🏁 Complete Visit',
+                                      subtitle: 'Check-Out & End Call',
+                                      color: Colors.amber[700]!,
+                                      onTap: () => _checkoutOutlet(outlet),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -492,6 +563,34 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                 },
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _actionCard({
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 10)),
           ],
         ),
       ),

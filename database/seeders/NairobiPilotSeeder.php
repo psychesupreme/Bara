@@ -316,17 +316,17 @@ class NairobiPilotSeeder extends Seeder
 
         $c4 = Customer::create([
             'id' => (string) Str::uuid(),
-            'name' => 'CBD Convenience Store',
+            'name' => 'Kasarani Live Test Store',
             'code' => 'CUST-NAI-004',
             'customer_type' => 'outlet',
             'commercial_node_id' => $cbdTerritory->id,
             'tax_number' => 'P0511332211D',
             'phone' => '0744000444',
-            'email' => 'store@cbdconv.co.ke',
-            'address' => 'Kenyatta Avenue, Nairobi CBD',
+            'email' => 'store@kasaranilive.co.ke',
+            'address' => 'Thika Road, Kasarani, Nairobi',
             'county' => 'Nairobi',
-            'latitude' => -1.2845000,
-            'longitude' => 36.8210000,
+            'latitude' => -1.2002000,
+            'longitude' => 36.8344000,
             'is_active' => true,
         ]);
 
