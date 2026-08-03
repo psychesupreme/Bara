@@ -158,46 +158,55 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     });
   }
 
-  void _performOutletCheckIn(Map<String, dynamic> outlet) {
+  void _showGeofenceAlert(Map<String, dynamic> outlet, int? distance) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Geofence Boundary Alert', style: TextStyle(color: Colors.redAccent)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              outlet['name'] as String,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            Text(
+              'Zone: ${outlet['territory']}',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Your current location is ${_formatDistance(distance)} away from this outlet. Geofence check-in requires <= 1.5 km proximity.',
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.indigoAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performOutletCheckIn(Map<String, dynamic> outlet) async {
     final int distance = outlet['distanceMeters'] ?? 9999;
     final bool inGeofence = distance <= 1500; // 1.5km geofence tolerance for Nairobi pilot
 
     if (!inGeofence) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
-          title: const Text('Geofence Alert', style: TextStyle(color: Colors.redAccent)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                outlet['name'] as String,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              Text(
-                'Zone: ${outlet['territory']}',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'You are ${_formatDistance(distance)} away from this outlet (${outlet['lat']}, ${outlet['lng']}). Geofence check-in requires <= 1.5 km proximity.',
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(color: Colors.indigoAccent)),
-            ),
-          ],
-        ),
-      );
+      _showGeofenceAlert(outlet, distance);
       return;
     }
 
+    if (_currentPosition == null) {
+      await _fetchRealTimeLocation();
+    }
+
+    // Capture actual live phone GPS coordinates
     final double liveLat = _currentPosition?.latitude ?? outlet['lat'] as double;
     final double liveLng = _currentPosition?.longitude ?? outlet['lng'] as double;
 
@@ -226,13 +235,15 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       }),
     ).then((res) {
       if (res.statusCode == 200) {
-        debugPrint('Live GPS Telemetry Broadcast Succeeded!');
+        debugPrint('Live Device GPS Telemetry Broadcast Succeeded ($liveLat, $liveLng)!');
       }
     }).catchError((_) {});
 
+    if (!mounted) return;
+
     setState(() {
       outlet['status'] = 'Checked In (Active Visit)';
-      _statusMessage = 'Check-in Recorded! Reference: ${activity.referenceNo}';
+      _statusMessage = 'Check-in Recorded! Reference: ${activity.referenceNo} (GPS: ${liveLat.toStringAsFixed(4)}, ${liveLng.toStringAsFixed(4)})';
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -347,6 +358,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                   final outlet = _outlets[index];
                   final int? distance = outlet['distanceMeters'];
                   final bool isCheckedIn = outlet['status'].toString().contains('Checked In');
+                  final bool isInRange = distance != null && distance <= 1500;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -363,7 +375,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                           children: [
                             Icon(
                               isCheckedIn ? Icons.check_circle : Icons.storefront,
-                              color: isCheckedIn ? Colors.greenAccent : Colors.indigoAccent,
+                              color: isCheckedIn ? Colors.greenAccent : (isInRange ? Colors.indigoAccent : Colors.grey),
                               size: 32,
                             ),
                             const SizedBox(width: 14),
@@ -384,7 +396,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                   Text(
                                     'Proximity: ${_formatDistance(distance)}',
                                     style: TextStyle(
-                                      color: (distance != null && distance <= 1500) ? Colors.greenAccent : Colors.amberAccent,
+                                      color: isInRange ? Colors.greenAccent : Colors.amberAccent,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -394,12 +406,29 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton(
-                              onPressed: () => _performOutletCheckIn(outlet),
+                              onPressed: isCheckedIn
+                                  ? null
+                                  : (isInRange
+                                      ? () => _performOutletCheckIn(outlet)
+                                      : () => _showGeofenceAlert(outlet, distance)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: isCheckedIn ? Colors.grey[700] : const Color(0xFF6366F1),
+                                backgroundColor: isCheckedIn
+                                    ? Colors.grey[700]
+                                    : (isInRange ? const Color(0xFF6366F1) : const Color(0xFF334155)),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                              child: Text(isCheckedIn ? 'Visit Active' : 'Check In', style: const TextStyle(fontSize: 12, color: Colors.white)),
+                              child: Text(
+                                isCheckedIn
+                                    ? 'Visit Active'
+                                    : (isInRange ? 'Check In' : 'Out of Range'),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isCheckedIn
+                                      ? Colors.white54
+                                      : (isInRange ? Colors.white : Colors.amberAccent),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ],
                         ),
