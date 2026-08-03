@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -11,10 +12,18 @@ class WebAdminController extends Controller
 {
     public function dashboard(): Response
     {
-        $outlets = Customer::select('id', 'name', 'code', 'address', 'county', 'latitude', 'longitude', 'is_active')
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
-            ->get();
+        $outlets = [];
+
+        try {
+            if (class_exists(Customer::class) && Schema::hasTable('customers')) {
+                $outlets = Customer::select('id', 'name', 'code', 'address', 'county', 'latitude', 'longitude', 'is_active')
+                    ->whereNotNull('latitude')
+                    ->whereNotNull('longitude')
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            $outlets = [];
+        }
 
         return Inertia::render('Dashboard', [
             'outlets' => $outlets,
