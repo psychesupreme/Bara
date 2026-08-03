@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -10,7 +11,14 @@ class WebAdminController extends Controller
 {
     public function dashboard(): Response
     {
-        return Inertia::render('Dashboard');
+        $outlets = Customer::select('id', 'name', 'code', 'address', 'county', 'latitude', 'longitude', 'is_active')
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->get();
+
+        return Inertia::render('Dashboard', [
+            'outlets' => $outlets,
+        ]);
     }
 
     public function customer360(): Response

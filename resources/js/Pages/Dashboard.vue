@@ -33,7 +33,7 @@
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Active Field Reps</div>
           <div class="text-2xl font-heading font-bold text-white mt-2">4 On Shift</div>
           <div class="text-xs text-cyan-400 mt-1 flex items-center gap-1">
-            <span>CBD & Westlands Zones</span>
+            <span>CBD, Westlands & Kasarani Zones</span>
           </div>
         </div>
 
@@ -63,7 +63,7 @@
               <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping shrink-0"></span>
               Live Geofence & Location Telemetry
             </h3>
-            <span class="text-xs text-gray-400 font-mono">Center: Nairobi County (-1.28333, 36.81667)</span>
+            <span class="text-xs text-gray-400 font-mono">Nairobi County Auto-Fit Viewport</span>
           </div>
 
           <!-- Leaflet Map Mount Point -->
@@ -107,14 +107,22 @@ import { onMounted, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import L from 'leaflet';
 
+const props = defineProps({
+  outlets: {
+    type: Array,
+    default: () => [],
+  },
+});
+
 let mapInstance = null;
+let featureGroup = null;
 const repMarkersMap = {};
 
 const activityLogs = ref([
+  { user: 'Central Field Rep (CBD)', action: 'Check-in: Kasarani Live Test Store', location: 'Kasarani Zone (-1.2002, 36.8344)', time: '11:45:10 AM', lat: -1.2002000, lng: 36.8344000 },
   { user: 'Central Field Rep (CBD)', action: 'Check-in: Naivas Supermarket CBD Branch', location: 'CBD Zone (-1.2833, 36.8166)', time: '10:40:15 AM', lat: -1.2833300, lng: 36.8166700 },
   { user: 'Westlands Field Rep', action: 'Order Entry: KES 1,500 - Sarit Center Mart', location: 'Westlands Zone (-1.2612, 36.8041)', time: '10:35:40 AM', lat: -1.2612000, lng: 36.8041000 },
   { user: 'Nairobi Collection Officer', action: 'Payment Captured: KES 25,000 Cash', location: 'CBD Zone (-1.2845, 36.8210)', time: '10:28:10 AM', lat: -1.2845000, lng: 36.8210000 },
-  { user: 'Central Field Rep (CBD)', action: 'Completed Visit: CBD Convenience Store', location: 'CBD Zone (-1.2845, 36.8210)', time: '10:15:02 AM', lat: -1.2845000, lng: 36.8210000 },
 ]);
 
 const addTelemetryMarker = (repId, lat, lng, repName, outletName, timestamp) => {
@@ -139,31 +147,36 @@ const addTelemetryMarker = (repId, lat, lng, repName, outletName, timestamp) => 
       fillColor: '#F43F5E',
       fillOpacity: 0.9,
       radius: 11,
-    }).addTo(mapInstance);
+    });
 
-    marker.bindPopup(popupContent).openPopup();
+    marker.bindPopup(popupContent);
+    featureGroup.addLayer(marker);
     repMarkersMap[repId] = marker;
+    marker.openPopup();
   }
 
-  // Auto-center map on updated rep location pin
-  mapInstance.setView([lat, lng], 14, { animate: true });
+  // Smooth flyTo animation to active rep position marker
+  mapInstance.flyTo([lat, lng], 14, { animate: true, duration: 1.2 });
 };
 
 const clearTelemetryPins = () => {
   if (!mapInstance) return;
   Object.keys(repMarkersMap).forEach((id) => {
-    mapInstance.removeLayer(repMarkersMap[id]);
+    featureGroup.removeLayer(repMarkersMap[id]);
     delete repMarkersMap[id];
   });
+  if (featureGroup.getLayers().length > 0) {
+    mapInstance.fitBounds(featureGroup.getBounds().pad(0.15));
+  }
 };
 
 const refreshTelemetry = () => {
   const timeStr = new Date().toLocaleTimeString();
-  const sampleLat = -1.28333 + (Math.random() - 0.5) * 0.02;
-  const sampleLng = 36.81667 + (Math.random() - 0.5) * 0.02;
+  const sampleLat = -1.2002 + (Math.random() - 0.5) * 0.01;
+  const sampleLng = 36.8344 + (Math.random() - 0.5) * 0.01;
   const repId = 'REP-CBD-001';
   const repName = 'Central Field Rep (CBD)';
-  const outletName = 'Naivas Supermarket CBD Branch';
+  const outletName = 'Kasarani Live Test Store';
 
   activityLogs.value.unshift({
     user: repName,
@@ -179,7 +192,7 @@ const refreshTelemetry = () => {
 
 onMounted(() => {
   // Initialize Leaflet Map centered on Nairobi
-  mapInstance = L.map('dispatch-map').setView([-1.2833300, 36.8166700], 13);
+  mapInstance = L.map('dispatch-map').setView([-1.2500000, 36.8100000], 12);
 
   // Dark Tile Layer
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -187,37 +200,52 @@ onMounted(() => {
     maxZoom: 19,
   }).addTo(mapInstance);
 
-  // Outlets Seeded Markers
-  const outlets = [
+  featureGroup = L.featureGroup().addTo(mapInstance);
+
+  // Combine Inertia props outlets with default fallback list (including Kasarani Live Test Store)
+  const defaultOutlets = [
+    { name: 'Kasarani Live Test Store', lat: -1.2002000, lng: 36.8344000, status: 'Active Visit (Live UAT)' },
     { name: 'Naivas Supermarket CBD Branch', lat: -1.2833300, lng: 36.8166700, status: 'Active Visit' },
     { name: 'Sarit Center Mart', lat: -1.2612000, lng: 36.8041000, status: 'Order Submitted' },
     { name: 'Yaya Center MiniMart', lat: -1.2917000, lng: 36.7865000, status: 'Scheduled' },
     { name: 'CBD Convenience Store', lat: -1.2845000, lng: 36.8210000, status: 'Visit Completed' },
   ];
 
-  outlets.forEach(outlet => {
-    L.circleMarker([outlet.lat, outlet.lng], {
-      color: '#6366F1',
-      fillColor: '#818CF8',
-      fillOpacity: 0.8,
-      radius: 8,
-    }).addTo(mapInstance)
-      .bindPopup(`<b>${outlet.name}</b><br><span style="color:#10B981;">Status: ${outlet.status}</span>`);
+  const mapOutlets = (props.outlets && props.outlets.length > 0)
+    ? props.outlets.map((o) => ({ name: o.name, lat: parseFloat(o.latitude), lng: parseFloat(o.longitude), status: 'Active Outlet' }))
+    : defaultOutlets;
+
+  mapOutlets.forEach((outlet) => {
+    if (!isNaN(outlet.lat) && !isNaN(outlet.lng)) {
+      const marker = L.circleMarker([outlet.lat, outlet.lng], {
+        color: outlet.lat === -1.2002 ? '#10B981' : '#6366F1',
+        fillColor: outlet.lat === -1.2002 ? '#34D399' : '#818CF8',
+        fillOpacity: 0.85,
+        radius: outlet.lat === -1.2002 ? 10 : 8,
+      }).bindPopup(`<b>${outlet.name}</b><br><span style="color:#10B981;">Status: ${outlet.status}</span>`);
+
+      featureGroup.addLayer(marker);
+    }
   });
 
-  // Rep Initial Live GPS Pin
-  addTelemetryMarker('REP-CBD-001', -1.2835000, 36.8170000, 'Central Field Rep (CBD)', 'On Shift | Active GPS', new Date().toLocaleTimeString());
+  // Rep Initial Live GPS Pin (Kasarani Live Test Store Position)
+  addTelemetryMarker('REP-CBD-001', -1.2002000, 36.8344000, 'Central Field Rep (CBD)', 'Kasarani Live Test Store | On Shift', new Date().toLocaleTimeString());
 
-  // WebSocket Listener if Reverb/Echo is active
+  // Auto-fit map viewport bounds to frame Kasarani, CBD, Westlands & Kilimani cleanly
+  if (featureGroup.getLayers().length > 0) {
+    mapInstance.fitBounds(featureGroup.getBounds().pad(0.15));
+  }
+
+  // WebSocket Listener for real-time telemetry stream
   if (typeof window !== 'undefined' && window.Echo) {
     window.Echo.channel('telemetry-stream')
       .listen('TelemetryPingEvent', (e) => {
         const timeStr = new Date().toLocaleTimeString();
-        const lat = e.latitude || -1.28333;
-        const lng = e.longitude || 36.81667;
+        const lat = e.latitude || -1.2002;
+        const lng = e.longitude || 36.8344;
         const repId = e.rep_id || 'REP-CBD-001';
         const repName = e.rep_name || 'Central Field Rep (CBD)';
-        const outletName = e.outlet_name || 'Naivas Supermarket CBD Branch';
+        const outletName = e.outlet_name || 'Kasarani Live Test Store';
 
         activityLogs.value.unshift({
           user: repName,
