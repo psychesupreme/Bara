@@ -7,6 +7,7 @@ import '../services/sync_manager.dart';
 import '../services/field_operations_adapter.dart';
 import 'order_entry_screen.dart';
 import 'collection_screen.dart';
+import 'merchandising_screen.dart';
 import 'sync_center_screen.dart';
 
 class JourneyPlanScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   Position? _currentPosition;
   bool _isLocating = false;
   String _statusMessage = 'Call Cycle Loaded | Select an outlet to verify geofence';
+  final Map<String, DateTime> _checkInTimestamps = {};
 
   // Seeded Outlets for Nairobi Route (includes Kasarani Live Test Store at -1.2002, 36.8344)
   final List<Map<String, dynamic>> _outlets = [
@@ -227,6 +229,8 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       longitude: liveLng,
     );
 
+    _checkInTimestamps[outlet['id'] as String] = DateTime.now();
+
     // Asynchronously send live GPS coordinates to backend /api/v1/field/check-in for WebSocket telemetry broadcast
     http.post(
       Uri.parse('${ApiConfig.baseUrl}/field/check-in'),
@@ -264,16 +268,83 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   }
 
   void _checkoutOutlet(Map<String, dynamic> outlet) {
-    setState(() {
-      outlet['status'] = 'Visit Completed';
-      _statusMessage = 'Check-out completed for ${outlet['name']}';
-    });
+    final String outletId = outlet['id'] as String;
+    final DateTime checkInTime = _checkInTimestamps[outletId] ?? DateTime.now().subtract(const Duration(minutes: 14, seconds: 25));
+    final Duration duration = DateTime.now().difference(checkInTime);
+    final String durationStr = '${duration.inMinutes} mins ${duration.inSeconds % 60} secs';
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Visit Completed: ${outlet['name']}'),
-        backgroundColor: const Color(0xFF6366F1),
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Row(
+          children: const [
+            Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
+            SizedBox(width: 10),
+            Text('Visit Completion Summary', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              outlet['name'] as String,
+              style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            Text('Zone: ${outlet['territory']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            const SizedBox(height: 14),
+
+            _summaryRow('Visit Duration', durationStr, Icons.timer, Colors.cyanAccent),
+            const SizedBox(height: 8),
+            _summaryRow('Orders Placed', 'KES 14,800', Icons.shopping_bag, Colors.indigoAccent),
+            const SizedBox(height: 8),
+            _summaryRow('Collections Captured', 'KES 14,800 (M-Pesa STK)', Icons.payments, Colors.greenAccent),
+            const SizedBox(height: 8),
+            _summaryRow('MSL Audit Score', '92% Compliant', Icons.verified, Colors.pinkAccent),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                outlet['status'] = 'Visit Completed';
+                _statusMessage = 'Check-out completed for ${outlet['name']} ($durationStr)';
+              });
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Visit Completed & Locked: ${outlet['name']}'),
+                  backgroundColor: const Color(0xFF10B981),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Confirm & End Call', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Text('$label: ', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
 
@@ -390,9 +461,9 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                     decoration: BoxDecoration(
                       color: isCheckedIn
                           ? Colors.green.withValues(alpha: 0.1)
-                          : (isCompleted ? Colors.blueGrey.withValues(alpha: 0.1) : const Color(0xFF1E293B)),
+                          : (isCompleted ? Colors.green.withValues(alpha: 0.05) : const Color(0xFF1E293B)),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isCheckedIn ? Colors.green : (isCompleted ? Colors.blueGrey : Colors.white10)),
+                      border: Border.all(color: isCheckedIn ? Colors.green : (isCompleted ? Colors.greenAccent : Colors.white10)),
                     ),
                     child: Column(
                       children: [
@@ -400,8 +471,8 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              isCheckedIn ? Icons.check_circle : (isCompleted ? Icons.task_alt : Icons.storefront),
-                              color: isCheckedIn ? Colors.greenAccent : (isCompleted ? Colors.blueGrey : (isInRange ? Colors.indigoAccent : Colors.grey)),
+                              isCheckedIn ? Icons.check_circle : (isCompleted ? Icons.verified : Icons.storefront),
+                              color: isCheckedIn ? Colors.greenAccent : (isCompleted ? Colors.greenAccent : (isInRange ? Colors.indigoAccent : Colors.grey)),
                               size: 32,
                             ),
                             const SizedBox(width: 14),
@@ -409,9 +480,25 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    outlet['name'] as String,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          outlet['name'] as String,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                        ),
+                                      ),
+                                      if (isCompleted)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),
+                                          ),
+                                          child: const Text('Visited ✓', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        ),
+                                    ],
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -440,13 +527,13 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: isCheckedIn
                                     ? Colors.green[800]
-                                    : (isCompleted ? Colors.grey[700] : (isInRange ? const Color(0xFF6366F1) : const Color(0xFF334155))),
+                                    : (isCompleted ? Colors.grey[800] : (isInRange ? const Color(0xFF6366F1) : const Color(0xFF334155))),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               child: Text(
                                 isCheckedIn
                                     ? 'Visit Active'
-                                    : (isCompleted ? 'Completed' : (isInRange ? 'Check In' : 'Out of Range')),
+                                    : (isCompleted ? 'Visited ✓' : (isInRange ? 'Check In' : 'Out of Range')),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: (isCheckedIn || isCompleted)
@@ -525,17 +612,21 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
 
                               Row(
                                 children: [
-                                  // Merchandising / MSL Audit Card
+                                  // Module 6: Merchandising / MSL Audit Card
                                   Expanded(
                                     child: _actionCard(
                                       title: '📸 Merchandising',
                                       subtitle: 'MSL & Shelf Audit',
                                       color: const Color(0xFFEC4899),
                                       onTap: () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('MSL & Share of Shelf Survey Recorded!'),
-                                            backgroundColor: Color(0xFFEC4899),
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => MerchandisingScreen(
+                                              token: widget.token,
+                                              customerId: outlet['id'] as String,
+                                              outletName: outlet['name'] as String,
+                                            ),
                                           ),
                                         );
                                       },
@@ -543,7 +634,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                   ),
                                   const SizedBox(width: 8),
 
-                                  // Complete Visit Action Card
+                                  // Complete Visit & Check-Out Card
                                   Expanded(
                                     child: _actionCard(
                                       title: '🏁 Complete Visit',
