@@ -3,6 +3,8 @@ import 'package:geolocator/geolocator.dart';
 import '../config/api_config.dart';
 import '../services/sync_manager.dart';
 import '../services/field_operations_adapter.dart';
+import 'order_entry_screen.dart';
+import 'collection_screen.dart';
 
 class JourneyPlanScreen extends StatefulWidget {
   final String token;
@@ -311,49 +313,107 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: isCheckedIn ? Colors.green : Colors.white10),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Column(
                       children: [
-                        Icon(
-                          isCheckedIn ? Icons.check_circle : Icons.storefront,
-                          color: isCheckedIn ? Colors.greenAccent : Colors.indigoAccent,
-                          size: 32,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              isCheckedIn ? Icons.check_circle : Icons.storefront,
+                              color: isCheckedIn ? Colors.greenAccent : Colors.indigoAccent,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    outlet['name'] as String,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${outlet['territory']} • Lat: ${outlet['lat']}, Lng: ${outlet['lng']}',
+                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Proximity: ${_formatDistance(distance)}',
+                                    style: TextStyle(
+                                      color: (distance != null && distance <= 1500) ? Colors.greenAccent : Colors.amberAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () => _performOutletCheckIn(outlet),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isCheckedIn ? Colors.grey[700] : const Color(0xFF6366F1),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: Text(isCheckedIn ? 'Visit Active' : 'Check In', style: const TextStyle(fontSize: 12, color: Colors.white)),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        if (isCheckedIn) ...[
+                          const SizedBox(height: 12),
+                          const Divider(color: Colors.white10),
+                          const SizedBox(height: 8),
+                          Row(
                             children: [
-                              Text(
-                                outlet['name'] as String,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => OrderEntryScreen(
+                                          token: widget.token,
+                                          customerId: outlet['id'] as String,
+                                          outletName: outlet['name'] as String,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.add_shopping_cart, size: 16, color: Colors.indigoAccent),
+                                  label: const Text('Order Entry', style: TextStyle(color: Colors.indigoAccent, fontSize: 12)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.indigoAccent),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${outlet['territory']} • Lat: ${outlet['lat']}, Lng: ${outlet['lng']}',
-                                style: const TextStyle(color: Colors.grey, fontSize: 12),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Proximity: ${_formatDistance(distance)}',
-                                style: TextStyle(
-                                  color: (distance != null && distance <= 1500) ? Colors.greenAccent : Colors.amberAccent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => CollectionScreen(
+                                          token: widget.token,
+                                          customerId: outlet['id'] as String,
+                                          outletName: outlet['name'] as String,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.payments, size: 16, color: Colors.greenAccent),
+                                  label: const Text('Collection', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.greenAccent),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => _performOutletCheckIn(outlet),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isCheckedIn ? Colors.grey[700] : const Color(0xFF6366F1),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: Text(isCheckedIn ? 'Visit Active' : 'Check In', style: const TextStyle(fontSize: 12, color: Colors.white)),
-                        ),
+                        ],
                       ],
                     ),
                   );

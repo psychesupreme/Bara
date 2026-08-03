@@ -33,24 +33,19 @@ class FieldOperationsAdapter {
     return activity;
   }
 
-  /// Offline Sales Order Drafting with local pricing calculation
-  IsarSalesOrder draftSalesOrder({
+  /// Offline Sales Order Drafting with 7-tier pricing calculation
+  IsarSalesOrder createDraftOrder({
     required String clientUuid,
     required String customerId,
+    required String outletName,
     required List<Map<String, dynamic>> items,
+    required double totalAmount,
   }) {
-    double totalAmount = 0.0;
-    for (var item in items) {
-      final double qty = (item['quantity'] as num).toDouble();
-      final double unitPrice = (item['unit_price'] as num).toDouble();
-      totalAmount += (qty * unitPrice);
-    }
-
     final order = IsarSalesOrder(
       id: syncManager.localSalesOrders.length + 1,
       clientUuid: clientUuid,
       sequence: 1,
-      orderNumber: 'SO-OFFLINE-${DateTime.now().millisecondsSinceEpoch}',
+      orderNumber: 'SO-${DateTime.now().millisecondsSinceEpoch}',
       customerId: customerId,
       totalAmount: totalAmount,
       status: 'draft',
@@ -60,6 +55,31 @@ class FieldOperationsAdapter {
 
     syncManager.localSalesOrders.add(order);
     return order;
+  }
+
+  /// Offline Collection / Payment Receipt Entry
+  IsarActivity createDraftCollection({
+    required String clientUuid,
+    required String customerId,
+    required String outletName,
+    required double amount,
+    required String paymentMethod,
+    required String referenceNo,
+  }) {
+    final collection = IsarActivity(
+      id: syncManager.localActivities.length + 1,
+      clientUuid: clientUuid,
+      sequence: 1,
+      referenceNo: referenceNo,
+      activityType: 'collection',
+      title: 'Payment Collection ($paymentMethod): KES ${amount.toStringAsFixed(2)} - $outletName',
+      status: 'completed',
+      customerId: customerId,
+      isSynced: false,
+    );
+
+    syncManager.localActivities.add(collection);
+    return collection;
   }
 
   /// Merchandising Observation Capture (MSL Availability & Share of Shelf)
