@@ -450,10 +450,12 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
 
               // Auto-Flush Sync Queue immediately on visit completion
               try {
-                final result = await _syncManager.pushOfflineBatch();
+                final bool success = await _syncManager.pushOfflineBatch();
                 if (mounted) {
                   setState(() {
-                    _statusMessage = 'Visit Completed & Synced! Server Sync: ${result['status']}';
+                    _statusMessage = success 
+                        ? 'Visit Completed & Synced! Server Sync: 200 OK' 
+                        : 'Visit Completed! Saved Offline';
                   });
                 }
               } catch (e) {
