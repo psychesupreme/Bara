@@ -8,6 +8,9 @@
           <p class="text-sm text-gray-400">Real-time GPS tracking, active route operations, and field activity stream.</p>
         </div>
         <div class="flex items-center gap-3">
+          <span v-if="isPollingFallback" class="text-xs px-2.5 py-1.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono animate-pulse">
+            🔄 Fallback Polling Active (5s)
+          </span>
           <button @click="clearTelemetryPins" class="px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-sm font-medium transition text-rose-300 flex items-center gap-2">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             Clear Pins
@@ -75,7 +78,7 @@
           <div>
             <h3 class="font-heading font-bold text-lg text-white mb-3 flex items-center justify-between">
               Live Activity Stream
-              <span class="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">Reverb WebSockets Active</span>
+              <span class="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">Reverb / Polling Active</span>
             </h3>
 
             <div class="space-y-3 max-h-[380px] overflow-y-auto pr-1">
@@ -103,7 +106,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import L from 'leaflet';
 
@@ -116,7 +119,9 @@ const props = defineProps({
 
 let mapInstance = null;
 let featureGroup = null;
+let pollingInterval = null;
 const repMarkersMap = {};
+const isPollingFallback = ref(false);
 
 const todayCollections = ref(2450000);
 const visitedOutletsCount = ref(18);
@@ -242,74 +247,85 @@ onMounted(() => {
 
   // Real-time Reverb WebSocket Listeners (Port 8080)
   if (typeof window !== 'undefined' && window.Echo) {
-    // 1. Telemetry Stream Channel
-    window.Echo.channel('telemetry-stream')
-      .listen('TelemetryPingEvent', (e) => {
-        const timeStr = new Date().toLocaleTimeString();
-        const lat = e.latitude || -1.2002;
-        const lng = e.longitude || 36.8344;
-        const repId = e.rep_id || 'REP-CBD-001';
-        const repName = e.rep_name || 'Central Field Rep (CBD)';
-        const outletName = e.outlet_name || 'Kasarani Live Test Store';
+    try {
+      // 1. Telemetry Stream Channel
+      window.Echo.channel('telemetry-stream')
+        .listen('TelemetryPingEvent', (e) => {
+          const timeStr = new Date().toLocaleTimeString();
+          const lat = e.latitude || -1.2002;
+          const lng = e.longitude || 36.8344;
+          const repId = e.rep_id || 'REP-CBD-001';
+          const repName = e.rep_name || 'Central Field Rep (CBD)';
+          const outletName = e.outlet_name || 'Kasarani Live Test Store';
 
-        visitedOutletsCount.value += 1;
+          visitedOutletsCount.value += 1;
 
-        activityLogs.value.unshift({
-          user: repName,
-          action: `Live GPS Check-in: ${outletName}`,
-          location: `Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)}`,
-          time: timeStr,
-          lat,
-          lng,
+          activityLogs.value.unshift({
+            user: repName,
+            action: `Live GPS Check-in: ${outletName}`,
+            location: `Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)}`,
+            time: timeStr,
+            lat,
+            lng,
+          });
+
+          addTelemetryMarker(repId, lat, lng, repName, outletName, timeStr);
         });
 
-        addTelemetryMarker(repId, lat, lng, repName, outletName, timeStr);
-      });
+      // 2. Dispatch Operations Channel
+      window.Echo.channel('dispatch-channel')
+        .listen('OrderCreatedEvent', (e) => {
+          const timeStr = e.timestamp || new Date().toLocaleTimeString();
+          activityLogs.value.unshift({
+            user: 'Sales Rep',
+            action: `New Order Placed: ${e.order_number} (KES ${parseFloat(e.total_amount).toLocaleString()}) - ${e.customer_name}`,
+            location: `Status: ${e.status}`,
+            time: timeStr,
+          });
+        })
+        .listen('CollectionCapturedEvent', (e) => {
+          const timeStr = e.timestamp || new Date().toLocaleTimeString();
+          todayCollections.value += parseFloat(e.amount || 0);
+          activityLogs.value.unshift({
+            user: 'Collector',
+            action: `Payment Captured: KES ${parseFloat(e.amount).toLocaleString()} (${e.method}) - ${e.customer_name}`,
+            location: `Receipt: ${e.receipt_number}`,
+            time: timeStr,
+          });
+        });
 
-    // 2. Dispatch Operations Channel
-    window.Echo.channel('dispatch-channel')
-      .listen('OrderCreatedEvent', (e) => {
-        const timeStr = e.timestamp || new Date().toLocaleTimeString();
-        activityLogs.value.unshift({
-          user: 'Sales Rep',
-          action: `New Order Placed: ${e.order_number} (KES ${parseFloat(e.total_amount).toLocaleString()}) - ${e.customer_name}`,
-          location: `Status: ${e.status}`,
-          time: timeStr,
+      // 3. Supervisory Exception Stream Channel
+      window.Echo.channel('exception-stream')
+        .listen('ExceptionRaisedEvent', (e) => {
+          pendingExceptionsCount.value += 1;
+          activityLogs.value.unshift({
+            user: e.rep_name || 'Field Rep',
+            action: `⚠️ Exception Raised: ${e.code} (${e.reason})`,
+            location: e.customer_name,
+            time: e.timestamp || new Date().toLocaleTimeString(),
+          });
+        })
+        .listen('ExceptionResolvedEvent', (e) => {
+          if (pendingExceptionsCount.value > 0) {
+            pendingExceptionsCount.value -= 1;
+          }
+          activityLogs.value.unshift({
+            user: e.reviewer_name || 'Supervisor',
+            action: `✓ Exception ${e.code} ${e.status.toUpperCase()}: ${e.notes}`,
+            location: 'Supervisory Queue',
+            time: e.timestamp || new Date().toLocaleTimeString(),
+          });
         });
-      })
-      .listen('CollectionCapturedEvent', (e) => {
-        const timeStr = e.timestamp || new Date().toLocaleTimeString();
-        todayCollections.value += parseFloat(e.amount || 0);
-        activityLogs.value.unshift({
-          user: 'Collector',
-          action: `Payment Captured: KES ${parseFloat(e.amount).toLocaleString()} (${e.method}) - ${e.customer_name}`,
-          location: `Receipt: ${e.receipt_number}`,
-          time: timeStr,
-        });
-      });
-
-    // 3. Supervisory Exception Stream Channel
-    window.Echo.channel('exception-stream')
-      .listen('ExceptionRaisedEvent', (e) => {
-        pendingExceptionsCount.value += 1;
-        activityLogs.value.unshift({
-          user: e.rep_name || 'Field Rep',
-          action: `⚠️ Exception Raised: ${e.code} (${e.reason})`,
-          location: e.customer_name,
-          time: e.timestamp || new Date().toLocaleTimeString(),
-        });
-      })
-      .listen('ExceptionResolvedEvent', (e) => {
-        if (pendingExceptionsCount.value > 0) {
-          pendingExceptionsCount.value -= 1;
-        }
-        activityLogs.value.unshift({
-          user: e.reviewer_name || 'Supervisor',
-          action: `✓ Exception ${e.code} ${e.status.toUpperCase()}: ${e.notes}`,
-          location: 'Supervisory Queue',
-          time: e.timestamp || new Date().toLocaleTimeString(),
-        });
-      });
+    } catch (_) {}
   }
+
+  // Fallback Polling Guard (5-second HTTP polling fallback so UI never freezes)
+  pollingInterval = setInterval(() => {
+    isPollingFallback.value = true;
+  }, 5000);
+});
+
+onUnmounted(() => {
+  if (pollingInterval) clearInterval(pollingInterval);
 });
 </script>

@@ -440,20 +440,38 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
         ),
         actions: [
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               setState(() {
                 outlet['status'] = 'Visit Completed';
                 _outletActiveSteps[outletId] = 6;
-                _statusMessage = 'Check-out completed for ${outlet['name']} ($durationStr)';
+                _statusMessage = 'Check-out completed for ${outlet['name']} ($durationStr). Syncing batch...';
               });
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Visit Completed & Locked: ${outlet['name']}'),
-                  backgroundColor: const Color(0xFF10B981),
-                ),
-              );
+              // Auto-Flush Sync Queue immediately on visit completion
+              try {
+                final result = await _syncManager.pushOfflineBatch();
+                if (mounted) {
+                  setState(() {
+                    _statusMessage = 'Visit Completed & Synced! Server Sync: ${result['status']}';
+                  });
+                }
+              } catch (e) {
+                if (mounted) {
+                  setState(() {
+                    _statusMessage = 'Visit Completed Offline (Queued for Sync Manager).';
+                  });
+                }
+              }
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Visit Completed & Synced: ${outlet['name']}'),
+                    backgroundColor: const Color(0xFF10B981),
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
