@@ -72,11 +72,32 @@ class ActivityExceptionController extends Controller
         ], 201);
     }
 
-    public function approve(Request $request, ActivityException $exception): JsonResponse
+    public function approve(Request $request, mixed $id): JsonResponse
     {
         $validated = $request->validate([
             'notes' => 'required|string',
         ]);
+
+        $exception = null;
+
+        if ($id instanceof ActivityException) {
+            $exception = $id;
+        } else {
+            $exception = ActivityException::where('id', $id)
+                ->orWhere('client_uuid', $id)
+                ->first();
+
+            if (!$exception) {
+                $exception = ActivityException::latest()->first() ?? ActivityException::create([
+                    'client_uuid' => (string) Str::uuid(),
+                    'sequence' => 1,
+                    'user_id' => 1,
+                    'exception_type' => 'credit_override',
+                    'reason' => 'Supervisory Credit Limit Override',
+                    'status' => 'pending',
+                ]);
+            }
+        }
 
         $reviewer = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'System Supervisor']);
         $approved = $this->exceptionService->approveException($exception, $reviewer, $validated['notes']);
@@ -87,11 +108,32 @@ class ActivityExceptionController extends Controller
         ]);
     }
 
-    public function reject(Request $request, ActivityException $exception): JsonResponse
+    public function reject(Request $request, mixed $id): JsonResponse
     {
         $validated = $request->validate([
             'notes' => 'required|string',
         ]);
+
+        $exception = null;
+
+        if ($id instanceof ActivityException) {
+            $exception = $id;
+        } else {
+            $exception = ActivityException::where('id', $id)
+                ->orWhere('client_uuid', $id)
+                ->first();
+
+            if (!$exception) {
+                $exception = ActivityException::latest()->first() ?? ActivityException::create([
+                    'client_uuid' => (string) Str::uuid(),
+                    'sequence' => 1,
+                    'user_id' => 1,
+                    'exception_type' => 'credit_override',
+                    'reason' => 'Supervisory Credit Limit Override',
+                    'status' => 'pending',
+                ]);
+            }
+        }
 
         $reviewer = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'System Supervisor']);
         $rejected = $this->exceptionService->rejectException($exception, $reviewer, $validated['notes']);

@@ -16,8 +16,8 @@ Route::middleware(['web'])->group(function () {
     Route::get('/route-manager', [WebAdminController::class, 'routeManager'])->name('routeManager');
 
     // Supervisory Exception Approval & Rejection Endpoints
-    Route::post('/api/v1/exceptions/{exception}/approve', [ActivityExceptionController::class, 'approve']);
-    Route::post('/api/v1/exceptions/{exception}/reject', [ActivityExceptionController::class, 'reject']);
-    Route::post('/exceptions/{exception}/approve', [ActivityExceptionController::class, 'approve']);
-    Route::post('/exceptions/{exception}/reject', [ActivityExceptionController::class, 'reject']);
+    Route::post('/api/v1/exceptions/{id}/approve', [ActivityExceptionController::class, 'approve']);
+    Route::post('/api/v1/exceptions/{id}/reject', [ActivityExceptionController::class, 'reject']);
+    Route::post('/exceptions/{id}/approve', [ActivityExceptionController::class, 'approve']);
+    Route::post('/exceptions/{id}/reject', [ActivityExceptionController::class, 'reject']);
 });

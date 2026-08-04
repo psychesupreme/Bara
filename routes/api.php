@@ -90,8 +90,8 @@ Route::middleware([InitializeTenancyByHeaderOrDomain::class, EnsureDeviceNotRevo
         // Supervisory Exception Queue Routes (Phase 3)
         Route::get('/exceptions', [ActivityExceptionController::class, 'index']);
         Route::post('/exceptions', [ActivityExceptionController::class, 'store']);
-        Route::post('/exceptions/{exception}/approve', [ActivityExceptionController::class, 'approve']);
-        Route::post('/exceptions/{exception}/reject', [ActivityExceptionController::class, 'reject']);
+        Route::post('/exceptions/{id}/approve', [ActivityExceptionController::class, 'approve']);
+        Route::post('/exceptions/{id}/reject', [ActivityExceptionController::class, 'reject']);
 
         // HR & Timesheet Routes (Phase 4)
         Route::get('/timesheets', [TimesheetController::class, 'index']);
