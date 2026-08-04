@@ -84,6 +84,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const filter = ref('all');
@@ -124,58 +125,47 @@ const filteredExceptions = computed(() => {
   return exceptions.value.filter(e => e.type === filter.value);
 });
 
-const approveException = async (item) => {
+// Refactored to native Inertia router.post for automatic CSRF token injection
+const approveException = (item) => {
   item.processing = true;
   errorMessage.value = '';
 
-  try {
-    const res = await fetch(`/api/v1/exceptions/${item.id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ notes: 'Approved via Web Admin Supervisory Queue' }),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({ message: 'Server Exception' }));
-      errorMessage.value = errData.message || `Failed with HTTP ${res.status}`;
+  router.post(`/exceptions/${item.id}/approve`, {
+    notes: 'Approved via Web Admin Supervisory Queue',
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      exceptions.value = exceptions.value.filter(e => e.id !== item.id);
+      toastMessage.value = `Approved exception ${item.code} for ${item.customer}. Order state machine & DB updated!`;
+    },
+    onError: (errors) => {
+      errorMessage.value = Object.values(errors).join('; ') || 'Approval failed';
+    },
+    onFinish: () => {
       item.processing = false;
-      return;
-    }
-
-    exceptions.value = exceptions.value.filter(e => e.id !== item.id);
-    toastMessage.value = `Approved exception ${item.code} for ${item.customer}. Order state machine & DB updated!`;
-  } catch (err) {
-    errorMessage.value = err.message || 'Network connection failed while executing approval';
-  } finally {
-    item.processing = false;
-  }
+    },
+  });
 };
 
-const rejectException = async (item) => {
+const rejectException = (item) => {
   item.processing = true;
   errorMessage.value = '';
 
-  try {
-    const res = await fetch(`/api/v1/exceptions/${item.id}/reject`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ notes: 'Rejected via Web Admin Supervisory Queue' }),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({ message: 'Server Exception' }));
-      errorMessage.value = errData.message || `Failed with HTTP ${res.status}`;
+  router.post(`/exceptions/${item.id}/reject`, {
+    notes: 'Rejected via Web Admin Supervisory Queue',
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      exceptions.value = exceptions.value.filter(e => e.id !== item.id);
+      toastMessage.value = `Rejected exception ${item.code} for ${item.customer}. DB updated cleanly!`;
+    },
+    onError: (errors) => {
+      errorMessage.value = Object.values(errors).join('; ') || 'Rejection failed';
+    },
+    onFinish: () => {
       item.processing = false;
-      return;
-    }
-
-    exceptions.value = exceptions.value.filter(e => e.id !== item.id);
-    toastMessage.value = `Rejected exception ${item.code} for ${item.customer}. DB updated cleanly!`;
-  } catch (err) {
-    errorMessage.value = err.message || 'Network connection failed while executing rejection';
-  } finally {
-    item.processing = false;
-  }
+    },
+  });
 };
 
 const fetchExceptions = async () => {
@@ -208,14 +198,11 @@ const fetchExceptions = async () => {
 };
 
 onMounted(() => {
-  let wsConnected = false;
-
   // Listen to Reverb WebSockets on port 8080 (exception-stream channel)
   if (typeof window !== 'undefined' && window.Echo) {
     try {
       window.Echo.channel('exception-stream')
         .listen('ExceptionRaisedEvent', (e) => {
-          wsConnected = true;
           const newException = {
             id: e.id || Date.now(),
             code: e.code || 'EXP-AUTO-001',
@@ -235,13 +222,12 @@ onMounted(() => {
           }
         })
         .listen('ExceptionResolvedEvent', (e) => {
-          wsConnected = true;
           exceptions.value = exceptions.value.filter(item => String(item.id) !== String(e.id) && item.code !== e.code);
         });
     } catch (_) {}
   }
 
-  // Fallback Polling Guard (5-second HTTP polling if WebSockets disconnect or unavailable)
+  // Fallback Polling Guard
   pollingTimer = setInterval(() => {
     fetchExceptions();
     isPolling.value = true;
