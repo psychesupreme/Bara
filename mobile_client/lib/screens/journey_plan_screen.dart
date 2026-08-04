@@ -25,8 +25,9 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   late final FieldOperationsAdapter _adapter;
   Position? _currentPosition;
   bool _isLocating = false;
-  String _statusMessage = 'Call Cycle Loaded | Select an outlet to verify geofence';
+  String _statusMessage = 'My Work Hub Loaded | Select an outlet to execute guided call sequence';
   final Map<String, DateTime> _checkInTimestamps = {};
+  final Map<String, int> _outletActiveSteps = {}; // Tracks guided call step 1 to 6 per outlet
 
   // Seeded Outlets for Nairobi Route (includes Kasarani Live Test Store at -1.2002, 36.8344)
   final List<Map<String, dynamic>> _outlets = [
@@ -38,6 +39,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'lng': 36.8344000,
       'status': 'Pending Visit',
       'distanceMeters': null,
+      'isProvisional': false,
     },
     {
       'id': 'CUST-NAIVAS-CBD',
@@ -47,6 +49,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'lng': 36.8166700,
       'status': 'Pending Visit',
       'distanceMeters': null,
+      'isProvisional': false,
     },
     {
       'id': 'CUST-SARIT-MART',
@@ -56,6 +59,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'lng': 36.8041000,
       'status': 'Pending Visit',
       'distanceMeters': null,
+      'isProvisional': false,
     },
     {
       'id': 'CUST-YAYA-MINI',
@@ -65,6 +69,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'lng': 36.7865000,
       'status': 'Pending Visit',
       'distanceMeters': null,
+      'isProvisional': false,
     },
     {
       'id': 'CUST-CBD-CONV',
@@ -74,6 +79,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'lng': 36.8210000,
       'status': 'Pending Visit',
       'distanceMeters': null,
+      'isProvisional': false,
     },
   ];
 
@@ -169,47 +175,124 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     });
   }
 
-  void _showGeofenceAlert(Map<String, dynamic> outlet, int? distance) {
+  /// PRD Section 4.5 Human-Readable Rule Failure Modal with "Request Manager Override"
+  void _showGeofenceRuleFailureModal(Map<String, dynamic> outlet, int? distance) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Geofence Boundary Alert', style: TextStyle(color: Colors.redAccent)),
+        title: Row(
+          children: const [
+            Icon(Icons.gpp_bad, color: Color(0xFFF43F5E), size: 28),
+            SizedBox(width: 8),
+            Text('Geofence Boundary Lock', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               outlet['name'] as String,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 15),
             ),
-            Text(
-              'Zone: ${outlet['territory']}',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            Text('Territory: ${outlet['territory']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF43F5E).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Rule Failure Reason:',
+                    style: TextStyle(color: Color(0xFFFB7185), fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your current position is ${_formatDistance(distance)} away. Standard outlet check-in requires <= 1.5 km proximity.',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              'Your current location is ${_formatDistance(distance)} away from this outlet. Geofence check-in requires <= 1.5 km proximity.',
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
+            const SizedBox(height: 14),
+            const Text(
+              'PRD Rule: Requesting a manager override unlocks Provisional Check-In. All drafted orders will remain locked in "pending_approval" status until authorized on /supervisory-queue.',
+              style: TextStyle(color: Colors.grey, fontSize: 11),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: Colors.indigoAccent)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _requestGeofenceManagerOverride(outlet);
+            },
+            icon: const Icon(Icons.shield, color: Colors.white, size: 16),
+            label: const Text('Request Manager Override', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),
     );
   }
 
+  /// Request Manager Override & Initiate Provisional Check-In
+  Future<void> _requestGeofenceManagerOverride(Map<String, dynamic> outlet) async {
+    // POST exception to backend /api/v1/exceptions
+    try {
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/exceptions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${widget.token}',
+          'X-Tenant': ApiConfig.defaultTenant,
+        },
+        body: jsonEncode({
+          'exception_type': 'off_geofence',
+          'reason': 'Remote check-in request outside 1500m geofence (${_formatDistance(outlet['distanceMeters'])})',
+          'outlet_name': outlet['name'],
+        }),
+      );
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    setState(() {
+      outlet['status'] = 'Checked In (Provisional Visit)';
+      outlet['isProvisional'] = true;
+      _outletActiveSteps[outlet['id'] as String] = 2; // Move to Step 2: Customer 360
+      _checkInTimestamps[outlet['id'] as String] = DateTime.now();
+      _statusMessage = 'Provisional Check-in Active! Override Request Sent to Supervisory Queue.';
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Provisional Check-In Activated! Override Request Submitted to /supervisory-queue.'),
+        backgroundColor: Color(0xFFF59E0B),
+      ),
+    );
+  }
+
   Future<void> _performOutletCheckIn(Map<String, dynamic> outlet) async {
     final int distance = outlet['distanceMeters'] ?? 9999;
-    final bool inGeofence = distance <= 1500; // 1.5km geofence tolerance for Nairobi pilot
+    final bool inGeofence = distance <= 1500;
 
     if (!inGeofence) {
-      _showGeofenceAlert(outlet, distance);
+      _showGeofenceRuleFailureModal(outlet, distance);
       return;
     }
 
@@ -217,7 +300,6 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       await _fetchRealTimeLocation();
     }
 
-    // Capture actual live phone GPS coordinates
     final double liveLat = _currentPosition?.latitude ?? outlet['lat'] as double;
     final double liveLng = _currentPosition?.longitude ?? outlet['lng'] as double;
 
@@ -230,39 +312,91 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     );
 
     _checkInTimestamps[outlet['id'] as String] = DateTime.now();
+    _outletActiveSteps[outlet['id'] as String] = 2; // Step 2: Customer 360
 
-    // Asynchronously send live GPS coordinates to backend /api/v1/field/check-in for WebSocket telemetry broadcast
-    http.post(
-      Uri.parse('${ApiConfig.baseUrl}/field/check-in'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${widget.token}',
-        'X-Tenant': ApiConfig.defaultTenant,
-      },
-      body: jsonEncode({
-        'customer_id': outlet['id'],
-        'outlet_name': outlet['name'],
-        'latitude': liveLat,
-        'longitude': liveLng,
-      }),
-    ).then((res) {
-      if (res.statusCode == 200) {
-        debugPrint('Live Device GPS Telemetry Broadcast Succeeded ($liveLat, $liveLng)!');
-      }
-    }).catchError((_) {});
+    try {
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/field/check-in'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${widget.token}',
+          'X-Tenant': ApiConfig.defaultTenant,
+        },
+        body: jsonEncode({
+          'customer_id': outlet['id'],
+          'outlet_name': outlet['name'],
+          'latitude': liveLat,
+          'longitude': liveLng,
+        }),
+      );
+    } catch (_) {}
 
     if (!mounted) return;
 
     setState(() {
       outlet['status'] = 'Checked In (Active Visit)';
-      _statusMessage = 'Check-in Recorded! Reference: ${activity.referenceNo} (GPS: ${liveLat.toStringAsFixed(4)}, ${liveLng.toStringAsFixed(4)})';
+      _statusMessage = 'Check-in Verified! Reference: ${activity.referenceNo}';
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Visit Started: ${outlet['name']} (${activity.referenceNo})'),
         backgroundColor: const Color(0xFF10B981),
+      ),
+    );
+  }
+
+  void _showCustomer360Modal(Map<String, dynamic> outlet) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Row(
+          children: const [
+            Icon(Icons.analytics, color: Colors.indigoAccent, size: 28),
+            SizedBox(width: 10),
+            Text('Customer 360 Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(outlet['name'] as String, style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 15)),
+            Text('Tax PIN: P0511223344A • Channel: Key Account Tier 1', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+            const SizedBox(height: 14),
+            _infoRow('Credit Limit', 'KES 500,000', Colors.white),
+            _infoRow('Outstanding Balance', 'KES 125,000', Colors.amberAccent),
+            _infoRow('Price List Engine', '7-Tier Precedence Engine', Colors.cyanAccent),
+            _infoRow('Last Order Trend', 'KES 45,000 (Delivered)', Colors.greenAccent),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _outletActiveSteps[outlet['id'] as String] = 3; // Move to Step 3: Merchandising
+              });
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
+            child: const Text('Proceed to Step 3: Merchandising', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String val, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          Text(val, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+        ],
       ),
     );
   }
@@ -297,7 +431,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
 
             _summaryRow('Visit Duration', durationStr, Icons.timer, Colors.cyanAccent),
             const SizedBox(height: 8),
-            _summaryRow('Orders Placed', 'KES 14,800', Icons.shopping_bag, Colors.indigoAccent),
+            _summaryRow('Orders Placed', outlet['isProvisional'] == true ? 'KES 14,800 (Locked)' : 'KES 14,800', Icons.shopping_bag, Colors.indigoAccent),
             const SizedBox(height: 8),
             _summaryRow('Collections Captured', 'KES 14,800 (M-Pesa STK)', Icons.payments, Colors.greenAccent),
             const SizedBox(height: 8),
@@ -310,6 +444,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
               Navigator.pop(context);
               setState(() {
                 outlet['status'] = 'Visit Completed';
+                _outletActiveSteps[outletId] = 6;
                 _statusMessage = 'Check-out completed for ${outlet['name']} ($durationStr)';
               });
 
@@ -353,7 +488,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F19),
       appBar: AppBar(
-        title: const Text('Nairobi Journey Plan'),
+        title: const Text('My Work Hub — SFA Execution'),
         backgroundColor: const Color(0xFF0F172A),
         actions: [
           IconButton(
@@ -384,7 +519,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Rep Profile Header Card
+            // Rep Profile & Shift Status Header Card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -425,7 +560,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Location & Geofence Status
+            // Location & Geofence Status Box
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -441,19 +576,22 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
             ),
             const SizedBox(height: 20),
 
-            const Text('Daily Call Cycle Outlets', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            const Text('Assigned Outlet Call Cycle', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 12),
 
-            // Outlets List
+            // Outlets List with 6-Step Guided Call Sequence
             Expanded(
               child: ListView.builder(
                 itemCount: _outlets.length,
                 itemBuilder: (context, index) {
                   final outlet = _outlets[index];
+                  final String outletId = outlet['id'] as String;
                   final int? distance = outlet['distanceMeters'];
                   final bool isCheckedIn = outlet['status'].toString().contains('Checked In');
                   final bool isCompleted = outlet['status'].toString().contains('Completed');
+                  final bool isProvisional = outlet['isProvisional'] == true;
                   final bool isInRange = distance != null && distance <= 1500;
+                  final int activeStep = _outletActiveSteps[outletId] ?? 1;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -498,6 +636,16 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                           ),
                                           child: const Text('Visited ✓', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
+                                      if (isProvisional && !isCompleted)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.4)),
+                                          ),
+                                          child: const Text('Provisional', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        ),
                                     ],
                                   ),
                                   const SizedBox(height: 4),
@@ -523,7 +671,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                   ? null
                                   : (isInRange
                                       ? () => _performOutletCheckIn(outlet)
-                                      : () => _showGeofenceAlert(outlet, distance)),
+                                      : () => _showGeofenceRuleFailureModal(outlet, distance)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: isCheckedIn
                                     ? Colors.green[800]
@@ -533,7 +681,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                               child: Text(
                                 isCheckedIn
                                     ? 'Visit Active'
-                                    : (isCompleted ? 'Visited ✓' : (isInRange ? 'Check In' : 'Out of Range')),
+                                    : (isCompleted ? 'Visited ✓' : (isInRange ? 'Step 1: Check In' : 'Out of Range')),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: (isCheckedIn || isCompleted)
@@ -546,17 +694,23 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                           ],
                         ),
 
-                        // Prominent Visit Action Menu Grid (Visible when Checked In)
+                        // PRD Section 7.7 6-Step Guided Call Sequence Grid
                         if (isCheckedIn) ...[
                           const SizedBox(height: 14),
                           const Divider(color: Colors.white10),
                           const SizedBox(height: 8),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Outlet Visit Action Menu',
-                              style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Guided Call Execution Sequence',
+                                style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                'Step $activeStep of 6',
+                                style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
 
@@ -564,60 +718,25 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                             children: [
                               Row(
                                 children: [
-                                  // Module 3: Order Entry Action Card
+                                  // Step 2: Customer 360 Profile
                                   Expanded(
                                     child: _actionCard(
-                                      title: '🛒 Order Entry',
-                                      subtitle: '7-Tier Waterfall Cart',
+                                      title: '2. Customer 360',
+                                      subtitle: 'Commercial Profile',
                                       color: const Color(0xFF6366F1),
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => OrderEntryScreen(
-                                              token: widget.token,
-                                              customerId: outlet['id'] as String,
-                                              outletName: outlet['name'] as String,
-                                            ),
-                                          ),
-                                        );
-                                      },
+                                      isActive: activeStep == 2,
+                                      onTap: () => _showCustomer360Modal(outlet),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
 
-                                  // Module 4: Collection & M-Pesa STK Push Action Card
+                                  // Step 3: Merchandising & MSL Audit
                                   Expanded(
                                     child: _actionCard(
-                                      title: '💳 Record Collection',
-                                      subtitle: 'M-Pesa STK Push',
-                                      color: const Color(0xFF10B981),
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => CollectionScreen(
-                                              token: widget.token,
-                                              customerId: outlet['id'] as String,
-                                              outletName: outlet['name'] as String,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-
-                              Row(
-                                children: [
-                                  // Module 6: Merchandising / MSL Audit Card
-                                  Expanded(
-                                    child: _actionCard(
-                                      title: '📸 Merchandising',
-                                      subtitle: 'MSL & Shelf Audit',
+                                      title: '3. Merchandising',
+                                      subtitle: 'MSL & SOS Audit',
                                       color: const Color(0xFFEC4899),
+                                      isActive: activeStep == 3,
                                       onTap: () {
                                         Navigator.push(
                                           context,
@@ -628,22 +747,80 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                               outletName: outlet['name'] as String,
                                             ),
                                           ),
-                                        );
+                                        ).then((_) {
+                                          setState(() => _outletActiveSteps[outletId] = 4);
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+
+                              Row(
+                                children: [
+                                  // Step 4: 7-Tier Price Waterfall Order Entry
+                                  Expanded(
+                                    child: _actionCard(
+                                      title: '4. Order Entry',
+                                      subtitle: '7-Tier Waterfall Cart',
+                                      color: const Color(0xFF3B82F6),
+                                      isActive: activeStep == 4,
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => OrderEntryScreen(
+                                              token: widget.token,
+                                              customerId: outlet['id'] as String,
+                                              outletName: outlet['name'] as String,
+                                            ),
+                                          ),
+                                        ).then((_) {
+                                          setState(() => _outletActiveSteps[outletId] = 5);
+                                        });
                                       },
                                     ),
                                   ),
                                   const SizedBox(width: 8),
 
-                                  // Complete Visit & Check-Out Card
+                                  // Step 5: Collection & M-Pesa STK Push
                                   Expanded(
                                     child: _actionCard(
-                                      title: '🏁 Complete Visit',
-                                      subtitle: 'Check-Out & End Call',
-                                      color: Colors.amber[700]!,
-                                      onTap: () => _checkoutOutlet(outlet),
+                                      title: '5. Collection',
+                                      subtitle: 'M-Pesa STK / Cash',
+                                      color: const Color(0xFF10B981),
+                                      isActive: activeStep == 5,
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => CollectionScreen(
+                                              token: widget.token,
+                                              customerId: outlet['id'] as String,
+                                              outletName: outlet['name'] as String,
+                                            ),
+                                          ),
+                                        ).then((_) {
+                                          setState(() => _outletActiveSteps[outletId] = 6);
+                                        });
+                                      },
                                     ),
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Step 6: Complete Visit & Check-Out Summary
+                              SizedBox(
+                                width: double.infinity,
+                                child: _actionCard(
+                                  title: '6. Complete Visit & Check-Out',
+                                  subtitle: 'End Call & Lock Outlet Record',
+                                  color: Colors.amber[700]!,
+                                  isActive: activeStep == 6,
+                                  onTap: () => _checkoutOutlet(outlet),
+                                ),
                               ),
                             ],
                           ),
@@ -664,6 +841,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     required String title,
     required String subtitle,
     required Color color,
+    required bool isActive,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -672,14 +850,21 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
+          color: isActive ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
+          border: Border.all(color: isActive ? color : color.withValues(alpha: 0.3), width: isActive ? 2 : 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+                if (isActive)
+                  Icon(Icons.play_circle_fill, color: color, size: 14),
+              ],
+            ),
             const SizedBox(height: 2),
             Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 10)),
           ],

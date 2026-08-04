@@ -23,7 +23,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div class="glass-card p-5 border-l-4 border-l-indigo-500">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Today's Collections</div>
-          <div class="text-2xl font-heading font-bold text-white mt-2">KES 2,450,000</div>
+          <div class="text-2xl font-heading font-bold text-white mt-2">KES {{ todayCollections.toLocaleString() }}</div>
           <div class="text-xs text-emerald-400 mt-1 flex items-center gap-1">
             <span>↑ 14.2%</span> vs yesterday
           </div>
@@ -39,17 +39,17 @@
 
         <div class="glass-card p-5 border-l-4 border-l-emerald-500">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Outlets Visited</div>
-          <div class="text-2xl font-heading font-bold text-white mt-2">18 / 24 Outlets</div>
+          <div class="text-2xl font-heading font-bold text-white mt-2">{{ visitedOutletsCount }} / 24 Outlets</div>
           <div class="text-xs text-emerald-400 mt-1 flex items-center gap-1">
-            <span>75% Journey Completion</span>
+            <span>{{ Math.round((visitedOutletsCount/24)*100) }}% Journey Completion</span>
           </div>
         </div>
 
         <div class="glass-card p-5 border-l-4 border-l-rose-500">
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Emergency SOS Alerts</div>
-          <div class="text-2xl font-heading font-bold text-white mt-2">0 Active</div>
-          <div class="text-xs text-gray-400 mt-1 flex items-center gap-1">
-            <span>All field reps safe</span>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Supervisory Exceptions</div>
+          <div class="text-2xl font-heading font-bold text-white mt-2">{{ pendingExceptionsCount }} Active</div>
+          <div class="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span>Pending Review on Queue</span>
           </div>
         </div>
       </div>
@@ -61,7 +61,7 @@
           <div class="flex items-center justify-between">
             <h3 class="font-heading font-bold text-lg text-white flex items-center gap-2">
               <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping shrink-0"></span>
-              Live Geofence & Location Telemetry
+              Live Geofence & Location Telemetry (Reverb Port 8080)
             </h3>
             <span class="text-xs text-gray-400 font-mono">Nairobi County Auto-Fit Viewport</span>
           </div>
@@ -75,7 +75,7 @@
           <div>
             <h3 class="font-heading font-bold text-lg text-white mb-3 flex items-center justify-between">
               Live Activity Stream
-              <span class="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">WebSocket / Polling</span>
+              <span class="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">Reverb WebSockets Active</span>
             </h3>
 
             <div class="space-y-3 max-h-[380px] overflow-y-auto pr-1">
@@ -117,6 +117,10 @@ const props = defineProps({
 let mapInstance = null;
 let featureGroup = null;
 const repMarkersMap = {};
+
+const todayCollections = ref(2450000);
+const visitedOutletsCount = ref(18);
+const pendingExceptionsCount = ref(2);
 
 const activityLogs = ref([
   { user: 'Central Field Rep (CBD)', action: 'Check-in: Kasarani Live Test Store', location: 'Kasarani Zone (-1.2002, 36.8344)', time: '11:45:10 AM', lat: -1.2002000, lng: 36.8344000 },
@@ -236,8 +240,9 @@ onMounted(() => {
     mapInstance.fitBounds(featureGroup.getBounds().pad(0.15));
   }
 
-  // WebSocket Listener for real-time telemetry stream
+  // Real-time Reverb WebSocket Listeners (Port 8080)
   if (typeof window !== 'undefined' && window.Echo) {
+    // 1. Telemetry Stream Channel
     window.Echo.channel('telemetry-stream')
       .listen('TelemetryPingEvent', (e) => {
         const timeStr = new Date().toLocaleTimeString();
@@ -246,6 +251,8 @@ onMounted(() => {
         const repId = e.rep_id || 'REP-CBD-001';
         const repName = e.rep_name || 'Central Field Rep (CBD)';
         const outletName = e.outlet_name || 'Kasarani Live Test Store';
+
+        visitedOutletsCount.value += 1;
 
         activityLogs.value.unshift({
           user: repName,
@@ -257,6 +264,51 @@ onMounted(() => {
         });
 
         addTelemetryMarker(repId, lat, lng, repName, outletName, timeStr);
+      });
+
+    // 2. Dispatch Operations Channel
+    window.Echo.channel('dispatch-channel')
+      .listen('OrderCreatedEvent', (e) => {
+        const timeStr = e.timestamp || new Date().toLocaleTimeString();
+        activityLogs.value.unshift({
+          user: 'Sales Rep',
+          action: `New Order Placed: ${e.order_number} (KES ${parseFloat(e.total_amount).toLocaleString()}) - ${e.customer_name}`,
+          location: `Status: ${e.status}`,
+          time: timeStr,
+        });
+      })
+      .listen('CollectionCapturedEvent', (e) => {
+        const timeStr = e.timestamp || new Date().toLocaleTimeString();
+        todayCollections.value += parseFloat(e.amount || 0);
+        activityLogs.value.unshift({
+          user: 'Collector',
+          action: `Payment Captured: KES ${parseFloat(e.amount).toLocaleString()} (${e.method}) - ${e.customer_name}`,
+          location: `Receipt: ${e.receipt_number}`,
+          time: timeStr,
+        });
+      });
+
+    // 3. Supervisory Exception Stream Channel
+    window.Echo.channel('exception-stream')
+      .listen('ExceptionRaisedEvent', (e) => {
+        pendingExceptionsCount.value += 1;
+        activityLogs.value.unshift({
+          user: e.rep_name || 'Field Rep',
+          action: `⚠️ Exception Raised: ${e.code} (${e.reason})`,
+          location: e.customer_name,
+          time: e.timestamp || new Date().toLocaleTimeString(),
+        });
+      })
+      .listen('ExceptionResolvedEvent', (e) => {
+        if (pendingExceptionsCount.value > 0) {
+          pendingExceptionsCount.value -= 1;
+        }
+        activityLogs.value.unshift({
+          user: e.reviewer_name || 'Supervisor',
+          action: `✓ Exception ${e.code} ${e.status.toUpperCase()}: ${e.notes}`,
+          location: 'Supervisory Queue',
+          time: e.timestamp || new Date().toLocaleTimeString(),
+        });
       });
   }
 });

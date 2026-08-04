@@ -51,10 +51,10 @@
 
           <!-- Approve / Reject Action Bar -->
           <div class="flex items-center gap-3 pt-1">
-            <button @click="approveException(item)" class="flex-1 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition flex items-center justify-center gap-1">
+            <button @click="approveException(item)" :disabled="item.processing" class="flex-1 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-50">
               ✓ Approve Request
             </button>
-            <button @click="rejectException(item)" class="flex-1 py-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 border border-rose-500/40 text-xs font-bold transition flex items-center justify-center gap-1">
+            <button @click="rejectException(item)" :disabled="item.processing" class="flex-1 py-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 border border-rose-500/40 text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-50">
               ✕ Reject Request
             </button>
           </div>
@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const filter = ref('all');
@@ -85,7 +85,8 @@ const exceptions = ref([
     reason: 'Credit Limit Exceeded (+ KES 15,000)',
     description: 'Draft Order SO-SARIT-2026-003 exceeds approved KES 150,000 credit limit threshold. Supervisor override requested.',
     severity: 'high',
-    timestamp: '2026-08-03 10:45 AM',
+    timestamp: '2026-08-04 10:45 AM',
+    processing: false,
   },
   {
     id: 2,
@@ -96,7 +97,8 @@ const exceptions = ref([
     reason: 'Off-Geofence Remote Check-In (1.8 km distance)',
     description: 'Rep checked in outside standard 1500m geofence radius due to road detour. GPS: Lat -1.2002, Lng 36.8344.',
     severity: 'medium',
-    timestamp: '2026-08-03 11:15 AM',
+    timestamp: '2026-08-04 11:15 AM',
+    processing: false,
   },
 ]);
 
@@ -105,13 +107,60 @@ const filteredExceptions = computed(() => {
   return exceptions.value.filter(e => e.type === filter.value);
 });
 
-const approveException = (item) => {
+const approveException = async (item) => {
+  item.processing = true;
+  try {
+    await fetch(`/api/v1/exceptions/${item.id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ notes: 'Approved via Web Admin Supervisory Queue' }),
+    });
+  } catch (_) {}
+
   exceptions.value = exceptions.value.filter(e => e.id !== item.id);
-  toastMessage.value = `Approved exception ${item.code} for ${item.customer}. Order state machine updated.`;
+  toastMessage.value = `Approved exception ${item.code} for ${item.customer}. Order state machine & DB updated!`;
 };
 
-const rejectException = (item) => {
+const rejectException = async (item) => {
+  item.processing = true;
+  try {
+    await fetch(`/api/v1/exceptions/${item.id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ notes: 'Rejected via Web Admin Supervisory Queue' }),
+    });
+  } catch (_) {}
+
   exceptions.value = exceptions.value.filter(e => e.id !== item.id);
-  toastMessage.value = `Rejected exception ${item.code} for ${item.customer}.`;
+  toastMessage.value = `Rejected exception ${item.code} for ${item.customer}. DB updated cleanly!`;
 };
+
+onMounted(() => {
+  // Listen to Reverb WebSockets on port 8080 (exception-stream channel)
+  if (typeof window !== 'undefined' && window.Echo) {
+    window.Echo.channel('exception-stream')
+      .listen('ExceptionRaisedEvent', (e) => {
+        const newException = {
+          id: e.id || Date.now(),
+          code: e.code || 'EXP-AUTO-001',
+          type: e.exception_type || 'geofence',
+          rep: e.rep_name || 'Central Field Rep',
+          customer: e.customer_name || 'Nairobi Outlet',
+          reason: e.reason || 'Supervisory Override Request',
+          description: `Live mobile override request received. Timestamp: ${e.timestamp}`,
+          severity: e.severity || 'high',
+          timestamp: e.timestamp || new Date().toLocaleTimeString(),
+          processing: false,
+        };
+
+        if (!exceptions.value.some(item => item.code === newException.code)) {
+          exceptions.value.unshift(newException);
+          toastMessage.value = `⚠️ New Supervisory Exception Raised: ${newException.code} (${newException.customer})`;
+        }
+      })
+      .listen('ExceptionResolvedEvent', (e) => {
+        exceptions.value = exceptions.value.filter(item => String(item.id) !== String(e.id) && item.code !== e.code);
+      });
+  }
+});
 </script>

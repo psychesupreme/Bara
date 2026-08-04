@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Activity;
 use App\Models\ActivityException;
 use App\Services\ActivityExceptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ActivityExceptionController extends Controller
 {
@@ -25,6 +27,48 @@ class ActivityExceptionController extends Controller
             'success' => true,
             'data' => $exceptions,
         ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'activity_id' => 'nullable|integer',
+            'exception_type' => 'required|string',
+            'reason' => 'required|string',
+            'outlet_name' => 'nullable|string',
+        ]);
+
+        $user = $request->user();
+        $activity = null;
+
+        if (!empty($validated['activity_id'])) {
+            $activity = Activity::find($validated['activity_id']);
+        }
+
+        if (!$activity) {
+            $activity = Activity::create([
+                'client_uuid' => (string) Str::uuid(),
+                'sequence' => 1,
+                'reference_no' => 'ACT-EXP-' . rand(100, 999),
+                'activity_type' => 'visit',
+                'title' => 'Visit Exception: ' . ($validated['outlet_name'] ?? 'Nairobi Outlet'),
+                'status' => 'exception',
+                'is_offline_captured' => true,
+            ]);
+        }
+
+        $exception = $this->exceptionService->routeToException(
+            activity: $activity,
+            user: $user,
+            exceptionType: $validated['exception_type'],
+            reason: $validated['reason']
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Supervisory override request submitted to exception queue.',
+            'data' => $exception->load(['activity', 'user']),
+        ], 201);
     }
 
     public function approve(Request $request, ActivityException $exception): JsonResponse
