@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\CustomerOutletExtension;
 use App\Models\OrderEvent;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
@@ -19,6 +20,7 @@ class OrderOrchestrationService
 
     /**
      * Create a new sales order in draft status.
+     * PRD Section 7.6: Ensures immutable price rule snapshotting (price_rule_id & raw applied discount rates).
      */
     public function createOrder(
         User $salesRep,
@@ -48,15 +50,18 @@ class OrderOrchestrationService
             foreach ($lines as $lineData) {
                 $lineSubtotal = round($lineData['quantity'] * $lineData['unit_price'], 2);
                 $lineDiscount = $lineData['discount_amount'] ?? 0.0;
+                $discountRate = $lineSubtotal > 0 ? round(($lineDiscount / $lineSubtotal) * 100.0, 2) : 0.0;
                 $lineTotal = max(0.0, $lineSubtotal - $lineDiscount);
 
                 SalesOrderLine::create([
                     'sales_order_id' => $order->id,
                     'product_id' => $lineData['product_id'],
+                    'price_rule_id' => $lineData['price_rule_id'] ?? null,
                     'quantity' => $lineData['quantity'],
                     'unit_price' => $lineData['unit_price'],
-                    'price_rule_code' => $lineData['price_rule_code'] ?? 'BASE',
+                    'price_rule_code' => $lineData['price_rule_code'] ?? 'PR-CUST-007',
                     'discount_amount' => $lineDiscount,
+                    'discount_rate' => $discountRate,
                     'line_total' => $lineTotal,
                 ]);
 
@@ -82,7 +87,7 @@ class OrderOrchestrationService
                 'from_status' => null,
                 'to_status' => 'draft',
                 'event_type' => 'ORDER_CREATED',
-                'notes' => 'Order created in draft status.',
+                'notes' => 'Order created in draft status with immutable price rule snapshotting.',
                 'created_at' => now(),
             ]);
 
@@ -91,62 +96,71 @@ class OrderOrchestrationService
     }
 
     /**
-     * Transition order status through state machine with compliance gatekeeping.
+     * Execute Order State Machine Transitions
      */
-    public function transitionStatus(SalesOrder $order, string $newStatus, ?User $user = null, ?string $notes = null): SalesOrder
-    {
-        $validTransitions = [
-            'draft' => ['pending_approval', 'cancelled'],
-            'pending_approval' => ['approved', 'cancelled'],
-            'approved' => ['allocated', 'cancelled'],
-            'allocated' => ['dispatched', 'cancelled'],
-            'dispatched' => ['delivered', 'cancelled'],
-            'delivered' => [],
-            'cancelled' => [],
+    public function transitionStatus(
+        SalesOrder $order,
+        string $newStatus,
+        ?User $user = null,
+        ?string $notes = null
+    ): SalesOrder {
+        $allowedStatuses = [
+            'draft',
+            'submitted',
+            'pending_approval',
+            'approved',
+            'rejected',
+            'credit_hold',
+            'allocated',
+            'stock_allocated',
+            'processing',
+            'dispatched',
+            'delivered',
+            'invoiced',
+            'closed',
         ];
 
-        $currentStatus = $order->status;
-        $allowed = $validTransitions[$currentStatus] ?? [];
-
-        if (!in_array($newStatus, $allowed, true)) {
-            throw new InvalidArgumentException("Invalid order transition from '{$currentStatus}' to '{$newStatus}'.");
+        if (!in_array($newStatus, $allowedStatuses)) {
+            throw new InvalidArgumentException("Invalid order status: {$newStatus}");
         }
 
-        // Compliance Gatekeeper before Approval
+        // Compliance Gatekeeper Check (OM-002): Block approval if total amount exceeds credit limit
         if ($newStatus === 'approved') {
-            $customer = $order->customer;
-            $extension = $customer->extension;
+            $extension = CustomerOutletExtension::where('customer_id', $order->customer_id)->first();
             if ($extension && $extension->credit_limit > 0) {
-                if ($order->total_amount > $extension->credit_limit) {
-                    throw new InvalidArgumentException("Order approval blocked: Total amount ({$order->total_amount}) exceeds credit limit ({$extension->credit_limit}).");
+                $currentBalance = $extension->outstanding_balance ?? 0.0;
+                if (($currentBalance + $order->total_amount) > $extension->credit_limit) {
+                    throw new InvalidArgumentException("Order total KES {$order->total_amount} exceeds customer credit limit KES {$extension->credit_limit}.");
                 }
             }
         }
 
-        // Generate KRA ETIMS electronic tax receipt upon dispatch
-        if ($newStatus === 'dispatched' && empty($order->etims_receipt_number)) {
-            $etimsData = $this->kraEtimsAdapter->generateElectronicTaxReceipt($order);
-            $order->update([
-                'etims_receipt_number' => $etimsData['etims_receipt_number'],
-                'etims_signature' => $etimsData['etims_signature'],
-                'etims_qr_code' => $etimsData['etims_qr_code'],
+        $fromStatus = $order->status;
+
+        DB::transaction(function () use ($order, $fromStatus, $newStatus, $user, $notes) {
+            $orderData = ['status' => $newStatus];
+
+            if ($newStatus === 'dispatched') {
+                $etimsPayload = $this->kraEtimsAdapter->generateElectronicTaxReceipt($order);
+                $orderData['etims_receipt_number'] = $etimsPayload['etims_receipt_number'];
+                $orderData['etims_signature'] = $etimsPayload['etims_signature'];
+                $orderData['etims_qr_code'] = $etimsPayload['etims_qr_code'];
+            }
+
+            $order->update($orderData);
+
+            OrderEvent::create([
+                'id' => (string) Str::uuid(),
+                'sales_order_id' => $order->id,
+                'user_id' => $user ? $user->id : null,
+                'from_status' => $fromStatus,
+                'to_status' => $newStatus,
+                'event_type' => 'STATUS_TRANSITION',
+                'notes' => $notes ?? "Order status changed from {$fromStatus} to {$newStatus}.",
+                'created_at' => now(),
             ]);
-        }
+        });
 
-        $order->update(['status' => $newStatus]);
-
-        // Append immutable order event (OM-008)
-        OrderEvent::create([
-            'id' => (string) Str::uuid(),
-            'sales_order_id' => $order->id,
-            'user_id' => $user?->id,
-            'from_status' => $currentStatus,
-            'to_status' => $newStatus,
-            'event_type' => 'STATUS_TRANSITION',
-            'notes' => $notes ?? "Transitioned from {$currentStatus} to {$newStatus}.",
-            'created_at' => now(),
-        ]);
-
-        return $order->fresh();
+        return $order->fresh(['lines']);
     }
 }

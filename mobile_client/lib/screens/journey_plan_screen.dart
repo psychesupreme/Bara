@@ -8,6 +8,7 @@ import '../services/field_operations_adapter.dart';
 import 'order_entry_screen.dart';
 import 'collection_screen.dart';
 import 'merchandising_screen.dart';
+import 'customer_360_screen.dart';
 import 'sync_center_screen.dart';
 
 class JourneyPlanScreen extends StatefulWidget {
@@ -348,44 +349,21 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   }
 
   void _showCustomer360Modal(Map<String, dynamic> outlet) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Row(
-          children: const [
-            Icon(Icons.analytics, color: Colors.indigoAccent, size: 28),
-            SizedBox(width: 10),
-            Text('Customer 360 Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
+    final String outletId = outlet['id'] as String;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Customer360Screen(
+          token: widget.token,
+          customerId: outletId,
+          outletName: outlet['name'] as String,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(outlet['name'] as String, style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 15)),
-            Text('Tax PIN: P0511223344A • Channel: Key Account Tier 1', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-            const SizedBox(height: 14),
-            _infoRow('Credit Limit', 'KES 500,000', Colors.white),
-            _infoRow('Outstanding Balance', 'KES 125,000', Colors.amberAccent),
-            _infoRow('Price List Engine', '7-Tier Precedence Engine', Colors.cyanAccent),
-            _infoRow('Last Order Trend', 'KES 45,000 (Delivered)', Colors.greenAccent),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _outletActiveSteps[outlet['id'] as String] = 3; // Move to Step 3: Merchandising
-              });
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
-            child: const Text('Proceed to Step 3: Merchandising', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
-    );
+    ).then((_) {
+      setState(() {
+        _outletActiveSteps[outletId] = 3; // Move to Step 3: Merchandising
+      });
+    });
   }
 
   Widget _infoRow(String label, String val, Color color) {

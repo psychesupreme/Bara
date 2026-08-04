@@ -38,11 +38,13 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('sales_order_id')->constrained('sales_orders')->cascadeOnDelete();
             $table->foreignUuid('product_id')->constrained('commercial_products')->cascadeOnDelete();
+            $table->foreignUuid('price_rule_id')->nullable()->constrained('price_rules')->nullOnDelete();
             
             $table->integer('quantity');
             $table->decimal('unit_price', 10, 2);
             $table->string('price_rule_code')->nullable();
             $table->decimal('discount_amount', 10, 2)->default(0.00);
+            $table->decimal('discount_rate', 5, 2)->default(0.00);
             $table->decimal('line_total', 12, 2);
             
             $table->timestamps();

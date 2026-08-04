@@ -15,10 +15,12 @@ class SalesOrderLine extends Model
     protected $fillable = [
         'sales_order_id',
         'product_id',
+        'price_rule_id',
         'quantity',
         'unit_price',
         'price_rule_code',
         'discount_amount',
+        'discount_rate',
         'line_total',
     ];
 
@@ -26,6 +28,7 @@ class SalesOrderLine extends Model
         'quantity' => 'integer',
         'unit_price' => 'float',
         'discount_amount' => 'float',
+        'discount_rate' => 'float',
         'line_total' => 'float',
     ];
 
@@ -37,5 +40,10 @@ class SalesOrderLine extends Model
     public function product()
     {
         return $this->belongsTo(CommercialProduct::class, 'product_id');
+    }
+
+    public function priceRule()
+    {
+        return $this->belongsTo(PriceRule::class, 'price_rule_id');
     }
 }
