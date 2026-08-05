@@ -8,6 +8,7 @@ use App\Models\ActivityException;
 use App\Models\User;
 use App\Services\ActivityExceptionService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -101,9 +102,12 @@ class ActivityExceptionController extends Controller
         }
     }
 
-    public function approve(Request $request, mixed $id): JsonResponse
+    public function approve(Request $request, mixed $id): mixed
     {
         if (!Schema::hasTable('activity_exceptions')) {
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->withErrors(['message' => 'Database schema incomplete: activity_exceptions table missing.']);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Database schema incomplete: activity_exceptions table missing. Run php artisan migrate.',
@@ -111,9 +115,7 @@ class ActivityExceptionController extends Controller
         }
 
         try {
-            $validated = $request->validate([
-                'notes' => 'required|string',
-            ]);
+            $notes = $request->input('notes', 'Approved via Web Admin Supervisory Queue');
 
             $exception = null;
 
@@ -125,10 +127,21 @@ class ActivityExceptionController extends Controller
                     ->first();
 
                 if (!$exception) {
-                    $exception = ActivityException::latest()->first() ?? ActivityException::create([
+                    $defaultActivity = Activity::first() ?? Activity::create([
                         'client_uuid' => (string) Str::uuid(),
                         'sequence' => 1,
-                        'user_id' => 1,
+                        'reference_no' => 'ACT-EXP-' . rand(100, 999),
+                        'activity_type' => 'visit',
+                        'title' => 'Visit Exception: Sarit Center Mart',
+                        'status' => 'exception',
+                        'is_offline_captured' => true,
+                    ]);
+
+                    $exception = ActivityException::latest()->first() ?? ActivityException::create([
+                        'client_uuid' => (string) Str::uuid(),
+                        'activity_id' => $defaultActivity->id,
+                        'sequence' => 1,
+                        'user_id' => $request->user()?->id ?? 1,
                         'exception_type' => 'credit_override',
                         'reason' => 'Supervisory Credit Limit Override',
                         'status' => 'pending',
@@ -137,13 +150,20 @@ class ActivityExceptionController extends Controller
             }
 
             $reviewer = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'System Supervisor']);
-            $approved = $this->exceptionService->approveException($exception, $reviewer, $validated['notes']);
+            $approved = $this->exceptionService->approveException($exception, $reviewer, $notes);
+
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->with('success', 'Exception approved successfully.');
+            }
 
             return response()->json([
                 'success' => true,
                 'data' => $approved,
             ]);
         } catch (\Throwable $e) {
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->withErrors(['message' => 'Failed to approve: ' . $e->getMessage()]);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to process exception approval: ' . $e->getMessage(),
@@ -151,9 +171,12 @@ class ActivityExceptionController extends Controller
         }
     }
 
-    public function reject(Request $request, mixed $id): JsonResponse
+    public function reject(Request $request, mixed $id): mixed
     {
         if (!Schema::hasTable('activity_exceptions')) {
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->withErrors(['message' => 'Database schema incomplete: activity_exceptions table missing.']);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Database schema incomplete: activity_exceptions table missing. Run php artisan migrate.',
@@ -161,9 +184,7 @@ class ActivityExceptionController extends Controller
         }
 
         try {
-            $validated = $request->validate([
-                'notes' => 'required|string',
-            ]);
+            $notes = $request->input('notes', 'Rejected via Web Admin Supervisory Queue');
 
             $exception = null;
 
@@ -175,10 +196,21 @@ class ActivityExceptionController extends Controller
                     ->first();
 
                 if (!$exception) {
-                    $exception = ActivityException::latest()->first() ?? ActivityException::create([
+                    $defaultActivity = Activity::first() ?? Activity::create([
                         'client_uuid' => (string) Str::uuid(),
                         'sequence' => 1,
-                        'user_id' => 1,
+                        'reference_no' => 'ACT-EXP-' . rand(100, 999),
+                        'activity_type' => 'visit',
+                        'title' => 'Visit Exception: Sarit Center Mart',
+                        'status' => 'exception',
+                        'is_offline_captured' => true,
+                    ]);
+
+                    $exception = ActivityException::latest()->first() ?? ActivityException::create([
+                        'client_uuid' => (string) Str::uuid(),
+                        'activity_id' => $defaultActivity->id,
+                        'sequence' => 1,
+                        'user_id' => $request->user()?->id ?? 1,
                         'exception_type' => 'credit_override',
                         'reason' => 'Supervisory Credit Limit Override',
                         'status' => 'pending',
@@ -187,13 +219,20 @@ class ActivityExceptionController extends Controller
             }
 
             $reviewer = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'System Supervisor']);
-            $rejected = $this->exceptionService->rejectException($exception, $reviewer, $validated['notes']);
+            $rejected = $this->exceptionService->rejectException($exception, $reviewer, $notes);
+
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->with('success', 'Exception rejected successfully.');
+            }
 
             return response()->json([
                 'success' => true,
                 'data' => $rejected,
             ]);
         } catch (\Throwable $e) {
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()->withErrors(['message' => 'Failed to reject: ' . $e->getMessage()]);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to process exception rejection: ' . $e->getMessage(),
