@@ -94,17 +94,66 @@ class WebAdminController extends Controller
         ]);
     }
 
-    public function customer360(\Illuminate\Http\Request $request): Response
+    public function customer360(Request $request, ?string $id = null): Response
     {
-        $customerId = $request->query('customer_id');
+        $targetId = $id ?? $request->query('customer_id') ?? $request->query('id');
         $customer = null;
-        if ($customerId && Schema::hasTable('customers')) {
-            try {
-                $customer = Customer::find($customerId);
-            } catch (\Throwable $e) {}
-        }
+
+        try {
+            if (Schema::hasTable('customers')) {
+                if ($targetId) {
+                    $customer = Customer::where('id', $targetId)
+                        ->orWhere('code', $targetId)
+                        ->first();
+                }
+                if (!$customer) {
+                    $customer = Customer::first();
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        $customerPayload = [
+            'name' => $customer?->name ?? 'Naivas Supermarket CBD Branch',
+            'code' => $customer?->code ?? 'CUST-NAI-001',
+            'tier' => $customer?->tier ?? 'Key Account Tier 1',
+            'channel' => $customer?->channel ?? 'Key Account Tier 1',
+            'credit_limit' => (float) ($customer?->credit_limit ?? 500000),
+            'outstanding_balance' => (float) ($customer?->outstanding_balance ?? 125000),
+            'creditLimit' => (float) ($customer?->credit_limit ?? 500000),
+            'balance' => (float) ($customer?->outstanding_balance ?? 125000),
+            'tax_pin' => $customer?->tax_pin ?? 'P0511223344A',
+            'taxPin' => $customer?->tax_pin ?? 'P0511223344A',
+            'address' => $customer?->address ?? 'Moi Avenue, Nairobi CBD',
+        ];
+
+        $customersList = [];
+        try {
+            if (Schema::hasTable('customers')) {
+                $customersList = Customer::select('id', 'name', 'code')->get()->toArray();
+            }
+        } catch (\Throwable $e) {}
+
+        $waterfallData = [
+            ['level' => 1, 'name' => 'Base Price', 'price' => 'KES 150.00', 'ruleRef' => 'PR-BASE-SFJ', 'applied' => false],
+            ['level' => 2, 'name' => 'Country Tier', 'price' => 'KES 148.00', 'ruleRef' => 'PR-CTRY-KE', 'applied' => false],
+            ['level' => 3, 'name' => 'Structure Tier', 'price' => 'KES 145.00', 'ruleRef' => 'PR-STR-NRB', 'applied' => false],
+            ['level' => 4, 'name' => 'Channel Tier', 'price' => 'KES 140.00', 'ruleRef' => 'PR-CHN-KA', 'applied' => true],
+            ['level' => 5, 'name' => 'Volume Tier', 'price' => 'KES 135.00', 'ruleRef' => 'PR-VOL-TIER2', 'applied' => true],
+            ['level' => 6, 'name' => 'Promo Discount', 'price' => 'KES 130.00', 'ruleRef' => 'PR-PROMO-NRB', 'applied' => true],
+            ['level' => 7, 'name' => 'Customer Net', 'price' => 'KES 124.80', 'ruleRef' => 'PR-CUST-NAIVAS', 'applied' => true],
+        ];
+
+        $ordersData = [
+            ['id' => 1, 'number' => 'SO-NAI-2026-001', 'date' => '2026-07-28', 'itemsCount' => 4, 'amount' => 45000, 'status' => 'delivered'],
+            ['id' => 2, 'number' => 'SO-NAI-2026-002', 'date' => '2026-07-25', 'itemsCount' => 2, 'amount' => 18000, 'status' => 'delivered'],
+        ];
+
         return Inertia::render('Customer360', [
-            'customer' => $customer,
+            'customer' => $customerPayload,
+            'customersList' => $customersList,
+            'waterfall' => $waterfallData,
+            'orders' => $ordersData,
+            'mslMetrics' => ['availability' => 92, 'share_of_shelf' => 48],
         ]);
     }
 

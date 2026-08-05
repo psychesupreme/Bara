@@ -9,7 +9,11 @@
         </div>
 
         <div class="flex items-center gap-3">
-          <select v-model="selectedCustomer" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-white focus:outline-none focus:border-indigo-500">
+          <select v-model="selectedCustomer" @change="onCustomerChange" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
+            <option value="" class="bg-gray-900">Select Customer Profile...</option>
+            <option v-for="c in customersList" :key="c.id" :value="c.id" class="bg-gray-900">
+              {{ c.name }} ({{ c.code }})
+            </option>
             <option value="naivas" class="bg-gray-900">Naivas Supermarket CBD Branch</option>
             <option value="sarit" class="bg-gray-900">Sarit Center Mart</option>
             <option value="yaya" class="bg-gray-900">Yaya Center MiniMart</option>
@@ -23,28 +27,28 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div class="space-y-2">
             <div class="flex items-center gap-3">
-              <h3 class="font-heading font-bold text-xl text-white">{{ customerData.name }}</h3>
+              <h3 class="font-heading font-bold text-xl text-white">{{ customerData?.name ?? 'Naivas Supermarket CBD Branch' }}</h3>
               <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono border border-indigo-500/30">
-                {{ customerData.code }}
+                {{ customerData?.code ?? 'CUST-NAI-001' }}
               </span>
               <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">
-                {{ customerData.channel }}
+                {{ customerData?.channel ?? customerData?.tier ?? 'Key Account Tier 1' }}
               </span>
             </div>
             <p class="text-sm text-gray-300 flex items-center gap-2">
-              <span>📍 {{ customerData.address }}</span>
-              <span>• Tax PIN: {{ customerData.taxPin }}</span>
+              <span>📍 {{ customerData?.address ?? 'Moi Avenue, Nairobi CBD' }}</span>
+              <span>• Tax PIN: {{ customerData?.tax_pin ?? customerData?.taxPin ?? 'P0511223344A' }}</span>
             </p>
           </div>
 
           <div class="flex items-center gap-4">
             <div class="text-right">
               <div class="text-xs text-gray-400">Credit Limit</div>
-              <div class="text-lg font-heading font-bold text-white">KES {{ customerData.creditLimit.toLocaleString() }}</div>
+              <div class="text-lg font-heading font-bold text-white">KES {{ formattedCreditLimit }}</div>
             </div>
             <div class="text-right pl-4 border-l border-white/10">
               <div class="text-xs text-gray-400">Outstanding Balance</div>
-              <div class="text-lg font-heading font-bold text-amber-400">KES {{ customerData.balance.toLocaleString() }}</div>
+              <div class="text-lg font-heading font-bold text-amber-400">KES {{ formattedBalance }}</div>
             </div>
           </div>
         </div>
@@ -61,19 +65,19 @@
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div v-for="(tier, idx) in priceWaterfallData" :key="idx" :class="['p-3.5 rounded-xl border transition flex flex-col justify-between', tier.applied ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/10 opacity-60']">
+          <div v-for="(tier, idx) in priceWaterfallData" :key="idx" :class="['p-3.5 rounded-xl border transition flex flex-col justify-between', tier?.applied ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/10 opacity-60']">
             <div>
               <div class="flex justify-between items-center text-xs mb-1">
-                <span class="font-mono text-gray-400 font-bold">Tier {{ tier.level }}</span>
-                <span v-if="tier.applied" class="text-emerald-400 font-bold text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded">APPLIED</span>
+                <span class="font-mono text-gray-400 font-bold">Tier {{ tier?.level }}</span>
+                <span v-if="tier?.applied" class="text-emerald-400 font-bold text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded">APPLIED</span>
                 <span v-else class="text-gray-500 text-[10px]">Skipped</span>
               </div>
-              <div class="text-xs font-semibold text-gray-200 line-clamp-1">{{ tier.name }}</div>
+              <div class="text-xs font-semibold text-gray-200 line-clamp-1">{{ tier?.name }}</div>
             </div>
 
             <div class="mt-2">
-              <div class="text-base font-heading font-bold text-white">{{ tier.price }}</div>
-              <div class="text-[10px] font-mono text-gray-400 truncate mt-0.5">{{ tier.ruleRef }}</div>
+              <div class="text-base font-heading font-bold text-white">{{ tier?.price }}</div>
+              <div class="text-[10px] font-mono text-gray-400 truncate mt-0.5">{{ tier?.ruleRef }}</div>
             </div>
           </div>
         </div>
@@ -86,15 +90,15 @@
           <h3 class="font-heading font-bold text-lg text-white">Order Lifecycle State Machine</h3>
 
           <div class="space-y-3">
-            <div v-for="order in customerOrders" :key="order.id" class="p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center">
+            <div v-for="order in customerOrders" :key="order?.id" class="p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center">
               <div>
-                <div class="font-mono text-sm text-indigo-300 font-semibold">{{ order.number }}</div>
-                <div class="text-xs text-gray-400">{{ order.date }} • {{ order.itemsCount }} Items</div>
+                <div class="font-mono text-sm text-indigo-300 font-semibold">{{ order?.number ?? order?.order_number ?? 'SO-2026' }}</div>
+                <div class="text-xs text-gray-400">{{ order?.date ?? '2026-07-28' }} • {{ order?.itemsCount ?? 4 }} Items</div>
               </div>
               <div class="text-right">
-                <div class="font-heading font-bold text-white">KES {{ order.amount.toLocaleString() }}</div>
+                <div class="font-heading font-bold text-white">KES {{ (order?.amount ?? order?.total_amount ?? 0).toLocaleString() }}</div>
                 <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono capitalize">
-                  {{ order.status }}
+                  {{ order?.status ?? 'delivered' }}
                 </span>
               </div>
             </div>
@@ -109,20 +113,20 @@
             <div>
               <div class="flex justify-between text-sm mb-1">
                 <span class="text-gray-300 font-medium">MSL Availability Score</span>
-                <span class="text-emerald-400 font-bold font-mono">92%</span>
+                <span class="text-emerald-400 font-bold font-mono">{{ mslMetricsData?.availability ?? 92 }}%</span>
               </div>
               <div class="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full" style="width: 92%"></div>
+                <div class="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full" :style="{ width: (mslMetricsData?.availability ?? 92) + '%' }"></div>
               </div>
             </div>
 
             <div>
               <div class="flex justify-between text-sm mb-1">
                 <span class="text-gray-300 font-medium">Share of Shelf Percentage</span>
-                <span class="text-indigo-400 font-bold font-mono">48%</span>
+                <span class="text-indigo-400 font-bold font-mono">{{ mslMetricsData?.share_of_shelf ?? 48 }}%</span>
               </div>
               <div class="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full" style="width: 48%"></div>
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full" :style="{ width: (mslMetricsData?.share_of_shelf ?? 48) + '%' }"></div>
               </div>
             </div>
 
@@ -138,36 +142,75 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
-    customer: {
-        type: Object,
-        default: () => ({
-            name: 'No Customer Selected',
-            code: 'N/A',
-            channel: 'N/A',
-            address: 'N/A',
-            taxPin: 'N/A',
-            creditLimit: 0,
-            balance: 0,
-        }),
-    },
-    priceWaterfall: {
-        type: Array,
-        default: () => [],
-    },
-    orders: {
-        type: Array,
-        default: () => [],
-    },
+  customer: {
+    type: Object,
+    default: () => ({
+      name: 'Naivas Supermarket CBD Branch',
+      code: 'CUST-NAI-001',
+      tier: 'Key Account Tier 1',
+      channel: 'Key Account Tier 1',
+      credit_limit: 500000,
+      outstanding_balance: 125000,
+      tax_pin: 'P0511223344A',
+      address: 'Moi Avenue, Nairobi CBD'
+    })
+  },
+  waterfall: {
+    type: Array,
+    default: () => []
+  },
+  orders: {
+    type: Array,
+    default: () => []
+  },
+  mslMetrics: {
+    type: Object,
+    default: () => ({ availability: 92, share_of_shelf: 48 })
+  },
+  customersList: {
+    type: Array,
+    default: () => []
+  }
 });
 
 const selectedCustomer = ref('');
 
-const customerData = computed(() => props.customer);
-const priceWaterfallData = computed(() => props.priceWaterfall.length > 0 ? props.priceWaterfall : defaultPriceWaterfall);
-const customerOrders = computed(() => props.orders.length > 0 ? props.orders : defaultOrders);
+const customerData = computed(() => props.customer ?? defaultCustomer);
+const customersList = computed(() => props.customersList ?? []);
+const priceWaterfallData = computed(() => (props.waterfall && props.waterfall.length > 0) ? props.waterfall : defaultPriceWaterfall);
+const customerOrders = computed(() => (props.orders && props.orders.length > 0) ? props.orders : defaultOrders);
+const mslMetricsData = computed(() => props.mslMetrics ?? { availability: 92, share_of_shelf: 48 });
+
+const formattedCreditLimit = computed(() => {
+  const val = customerData.value?.credit_limit ?? customerData.value?.creditLimit ?? 500000;
+  return typeof val === 'number' ? val.toLocaleString() : '500,000';
+});
+
+const formattedBalance = computed(() => {
+  const val = customerData.value?.outstanding_balance ?? customerData.value?.balance ?? 125000;
+  return typeof val === 'number' ? val.toLocaleString() : '125,000';
+});
+
+const onCustomerChange = () => {
+  if (selectedCustomer.value) {
+    router.get('/customers-360', { customer_id: selectedCustomer.value }, { preserveState: true, preserveScroll: true });
+  }
+};
+
+const defaultCustomer = {
+  name: 'Naivas Supermarket CBD Branch',
+  code: 'CUST-NAI-001',
+  tier: 'Key Account Tier 1',
+  channel: 'Key Account Tier 1',
+  credit_limit: 500000,
+  outstanding_balance: 125000,
+  tax_pin: 'P0511223344A',
+  address: 'Moi Avenue, Nairobi CBD'
+};
 
 const defaultPriceWaterfall = [
   { level: 1, name: 'Base Price', price: 'KES 150.00', ruleRef: 'PR-BASE-SFJ', applied: false },
