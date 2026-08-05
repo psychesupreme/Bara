@@ -4,12 +4,76 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class WebAdminController extends Controller
 {
+    /**
+     * Login view & Development Auto-Auth Fallback for local/staging UAT sessions
+     */
+    public function login(Request $request): RedirectResponse|Response
+    {
+        if (!Auth::check() && app()->environment('local', 'staging', 'testing')) {
+            $user = User::where('email', 'admin@bara.com')->first()
+                ?? User::where('email', 'nairobi.rep1@bara.app')->first()
+                ?? User::first();
+
+            if (!$user && Schema::hasTable('users')) {
+                try {
+                    $user = User::create([
+                        'id' => (string) Str::uuid(),
+                        'name' => 'Nairobi System Supervisor',
+                        'email' => 'admin@bara.com',
+                        'password' => bcrypt('password'),
+                        'role' => 'Supervisor',
+                    ]);
+                } catch (\Throwable $e) {}
+            }
+
+            if ($user) {
+                Auth::login($user);
+                return redirect()->intended('/dashboard');
+            }
+        }
+
+        if (Auth::check()) {
+            return redirect('/dashboard');
+        }
+
+        return redirect('/dashboard');
+    }
+
+    public function authenticate(Request $request): RedirectResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required'],
+        ]);
+
+        if (Auth::attempt($credentials)) {
+            $request->session()->regenerate();
+            return redirect()->intended('/dashboard');
+        }
+
+        return back()->withErrors([
+            'email' => 'The provided credentials do not match our records.',
+        ]);
+    }
+
+    public function logout(Request $request): RedirectResponse
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect('/dashboard');
+    }
     public function dashboard(): Response
     {
         $outlets = [];

@@ -8,6 +8,11 @@ Route::get('/', function () {
     return redirect('/dashboard');
 });
 
+// Named Authentication Routes
+Route::get('/login', [WebAdminController::class, 'login'])->name('login');
+Route::post('/login', [WebAdminController::class, 'authenticate']);
+Route::post('/logout', [WebAdminController::class, 'logout'])->name('logout');
+
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/dashboard', [WebAdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/customers-360', [WebAdminController::class, 'customer360'])->name('customer360');
