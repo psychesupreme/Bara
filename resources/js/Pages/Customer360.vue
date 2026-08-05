@@ -61,7 +61,7 @@
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div v-for="(tier, idx) in priceWaterfall" :key="idx" :class="['p-3.5 rounded-xl border transition flex flex-col justify-between', tier.applied ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/10 opacity-60']">
+          <div v-for="(tier, idx) in priceWaterfallData" :key="idx" :class="['p-3.5 rounded-xl border transition flex flex-col justify-between', tier.applied ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/10 opacity-60']">
             <div>
               <div class="flex justify-between items-center text-xs mb-1">
                 <span class="font-mono text-gray-400 font-bold">Tier {{ tier.level }}</span>
@@ -137,22 +137,39 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
-const selectedCustomer = ref('naivas');
-
-const customerData = ref({
-  name: 'Naivas Supermarket CBD Branch',
-  code: 'CUST-NAI-001',
-  channel: 'Key Account Tier 1',
-  address: 'Moi Avenue, Nairobi CBD',
-  taxPin: 'P0511223344A',
-  creditLimit: 500000,
-  balance: 125000,
+const props = defineProps({
+    customer: {
+        type: Object,
+        default: () => ({
+            name: 'No Customer Selected',
+            code: 'N/A',
+            channel: 'N/A',
+            address: 'N/A',
+            taxPin: 'N/A',
+            creditLimit: 0,
+            balance: 0,
+        }),
+    },
+    priceWaterfall: {
+        type: Array,
+        default: () => [],
+    },
+    orders: {
+        type: Array,
+        default: () => [],
+    },
 });
 
-const priceWaterfall = ref([
+const selectedCustomer = ref('');
+
+const customerData = computed(() => props.customer);
+const priceWaterfallData = computed(() => props.priceWaterfall.length > 0 ? props.priceWaterfall : defaultPriceWaterfall);
+const customerOrders = computed(() => props.orders.length > 0 ? props.orders : defaultOrders);
+
+const defaultPriceWaterfall = [
   { level: 1, name: 'Base Price', price: 'KES 150.00', ruleRef: 'PR-BASE-SFJ', applied: false },
   { level: 2, name: 'Country Tier', price: 'KES 148.00', ruleRef: 'PR-CTRY-KE', applied: false },
   { level: 3, name: 'Structure Tier', price: 'KES 145.00', ruleRef: 'PR-STR-NRB', applied: false },
@@ -160,10 +177,10 @@ const priceWaterfall = ref([
   { level: 5, name: 'Volume Tier', price: 'KES 135.00', ruleRef: 'PR-VOL-TIER2', applied: true },
   { level: 6, name: 'Promo Discount', price: 'KES 130.00', ruleRef: 'PR-PROMO-NRB', applied: true },
   { level: 7, name: 'Customer Net', price: 'KES 124.80', ruleRef: 'PR-CUST-NAIVAS', applied: true },
-]);
+];
 
-const customerOrders = ref([
+const defaultOrders = [
   { id: 1, number: 'SO-NAI-2026-001', date: '2026-07-28', itemsCount: 4, amount: 45000, status: 'delivered' },
   { id: 2, number: 'SO-NAI-2026-002', date: '2026-07-25', itemsCount: 2, amount: 18000, status: 'delivered' },
-]);
+];
 </script>

@@ -83,9 +83,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+
+const props = defineProps({
+    exceptions: {
+        type: Array,
+        default: () => [],
+    },
+});
 
 const filter = ref('all');
 const toastMessage = ref('');
@@ -93,36 +100,15 @@ const errorMessage = ref('');
 const isPolling = ref(false);
 let pollingTimer = null;
 
-const exceptions = ref([
-  {
-    id: 1,
-    code: 'EXP-CREDIT-004',
-    type: 'credit',
-    rep: 'Central Field Rep (CBD)',
-    customer: 'Sarit Center Mart',
-    reason: 'Credit Limit Exceeded (+ KES 15,000)',
-    description: 'Draft Order SO-SARIT-2026-003 exceeds approved KES 150,000 credit limit threshold. Supervisor override requested.',
-    severity: 'high',
-    timestamp: '2026-08-04 10:45 AM',
-    processing: false,
-  },
-  {
-    id: 2,
-    code: 'EXP-GEOFENCE-001',
-    type: 'geofence',
-    rep: 'Central Field Rep (CBD)',
-    customer: 'Kasarani Live Test Store',
-    reason: 'Off-Geofence Remote Check-In (1.8 km distance)',
-    description: 'Rep checked in outside standard 1500m geofence radius due to road detour. GPS: Lat -1.2002, Lng 36.8344.',
-    severity: 'medium',
-    timestamp: '2026-08-04 11:15 AM',
-    processing: false,
-  },
-]);
+const localExceptions = ref([...props.exceptions]);
+
+watch(() => props.exceptions, (newVal) => {
+    localExceptions.value = [...newVal];
+}, { deep: true });
 
 const filteredExceptions = computed(() => {
-  if (filter.value === 'all') return exceptions.value;
-  return exceptions.value.filter(e => e.type === filter.value);
+  if (filter.value === 'all') return localExceptions.value;
+  return localExceptions.value.filter(e => e.type === filter.value);
 });
 
 // Refactored to native Inertia router.post for automatic CSRF token injection
@@ -135,8 +121,7 @@ const approveException = (item) => {
   }, {
     preserveScroll: true,
     onSuccess: () => {
-      exceptions.value = exceptions.value.filter(e => e.id !== item.id);
-      toastMessage.value = `Approved exception ${item.code} for ${item.customer}. Order state machine & DB updated!`;
+      toastMessage.value = `Approved exception ${item.code} for ${item.customer}.`;
     },
     onError: (errors) => {
       errorMessage.value = Object.values(errors).join('; ') || 'Approval failed';
@@ -156,8 +141,7 @@ const rejectException = (item) => {
   }, {
     preserveScroll: true,
     onSuccess: () => {
-      exceptions.value = exceptions.value.filter(e => e.id !== item.id);
-      toastMessage.value = `Rejected exception ${item.code} for ${item.customer}. DB updated cleanly!`;
+      toastMessage.value = `Rejected exception ${item.code} for ${item.customer}.`;
     },
     onError: (errors) => {
       errorMessage.value = Object.values(errors).join('; ') || 'Rejection failed';
@@ -168,33 +152,8 @@ const rejectException = (item) => {
   });
 };
 
-const fetchExceptions = async () => {
-  try {
-    const res = await fetch('/api/v1/exceptions');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && Array.isArray(json.data.data)) {
-        // Merge pending exceptions
-        json.data.data.forEach((ex) => {
-          const code = 'EXP-' + String(ex.exception_type).toUpperCase().slice(0, 4) + '-' + ex.id;
-          if (!exceptions.value.some(item => item.id === ex.id || item.code === code)) {
-            exceptions.value.unshift({
-              id: ex.id,
-              code: code,
-              type: ex.exception_type || 'geofence',
-              rep: ex.user?.name || 'Field Rep',
-              customer: ex.activity?.field_location?.name || 'Nairobi Outlet',
-              reason: ex.reason || 'Supervisory Override Request',
-              description: 'Live exception fetched from API queue.',
-              severity: 'high',
-              timestamp: ex.created_at || new Date().toLocaleTimeString(),
-              processing: false,
-            });
-          }
-        });
-      }
-    }
-  } catch (_) {}
+const fetchExceptions = () => {
+  router.reload({ only: ['exceptions'], preserveScroll: true, preserveState: true });
 };
 
 onMounted(() => {
@@ -216,13 +175,13 @@ onMounted(() => {
             processing: false,
           };
 
-          if (!exceptions.value.some(item => item.code === newException.code)) {
-            exceptions.value.unshift(newException);
+          if (!localExceptions.value.some(item => item.code === newException.code)) {
+            localExceptions.value.unshift(newException);
             toastMessage.value = `⚠️ New Supervisory Exception Raised: ${newException.code} (${newException.customer})`;
           }
         })
         .listen('ExceptionResolvedEvent', (e) => {
-          exceptions.value = exceptions.value.filter(item => String(item.id) !== String(e.id) && item.code !== e.code);
+          localExceptions.value = localExceptions.value.filter(item => String(item.id) !== String(e.id) && item.code !== e.code);
         });
     } catch (_) {}
   }
@@ -236,5 +195,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (pollingTimer) clearInterval(pollingTimer);
+  if (typeof window !== 'undefined' && window.Echo) {
+      window.Echo.leave('exception-stream');
+  }
 });
 </script>

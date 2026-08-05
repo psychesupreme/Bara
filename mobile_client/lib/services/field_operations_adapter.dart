@@ -18,7 +18,6 @@ class FieldOperationsAdapter {
     required double longitude,
   }) {
     final activity = IsarActivity(
-      id: syncManager.localActivities.length + 1,
       clientUuid: clientUuid,
       sequence: 1,
       referenceNo: 'ACT-CHK-${DateTime.now().millisecondsSinceEpoch}',
@@ -44,7 +43,6 @@ class FieldOperationsAdapter {
     required double totalAmount,
   }) {
     final order = IsarSalesOrder(
-      id: syncManager.localSalesOrders.length + 1,
       clientUuid: clientUuid,
       sequence: 1,
       orderNumber: 'SO-${DateTime.now().millisecondsSinceEpoch}',
@@ -69,7 +67,6 @@ class FieldOperationsAdapter {
     required String referenceNo,
   }) {
     final collection = IsarActivity(
-      id: syncManager.localActivities.length + 1,
       clientUuid: clientUuid,
       sequence: 1,
       referenceNo: referenceNo,
@@ -93,7 +90,6 @@ class FieldOperationsAdapter {
     String? photoUrl,
   }) {
     final obs = IsarMerchObservation(
-      id: syncManager.localMerchObservations.length + 1,
       clientUuid: clientUuid,
       sequence: 1,
       customerId: customerId,

@@ -63,6 +63,10 @@
             <div class="text-xs text-gray-400 capitalize">{{ userRole }}</div>
           </div>
         </div>
+        
+        <Link href="/logout" method="post" as="button" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-sm font-medium border border-rose-500/20 transition">
+            Sign Out
+        </Link>
       </div>
     </aside>
 
@@ -102,7 +106,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 const page = usePage();
 
 const userName = computed(() => page.props.auth?.user?.name || 'Nairobi Admin');
-const userRole = computed(() => page.props.auth?.user?.role || 'Supervisor');
+const userRole = computed(() => page.props.auth?.user?.role || 'Unknown');
 const userInitials = computed(() => {
   const name = userName.value;
   return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();

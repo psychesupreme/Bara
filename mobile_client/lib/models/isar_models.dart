@@ -1,23 +1,33 @@
 // BARA Mobile Client - Isar DB Local Storage Models
 // File: mobile_client/lib/models/isar_models.dart
 
+import 'package:isar/isar.dart';
+
+part 'isar_models.g.dart';
+
+@collection
 class IsarActivity {
-  int id;
-  String clientUuid;
-  int sequence;
-  String referenceNo;
-  String activityType;
-  String title;
-  String status;
+  Id id = Isar.autoIncrement;
+
+  @Index()
+  late String clientUuid;
+
+  late int sequence;
+  late String referenceNo;
+  late String activityType;
+  late String title;
+  late String status;
   String? customerId;
   String? outcomeCode;
   double? latitude;
   double? longitude;
-  bool isSynced;
-  DateTime createdAt;
+  
+  @Index()
+  bool isSynced = false;
+  
+  DateTime? createdAt;
 
   IsarActivity({
-    required this.id,
     required this.clientUuid,
     required this.sequence,
     required this.referenceNo,
@@ -48,16 +58,19 @@ class IsarActivity {
   }
 }
 
+@collection
 class IsarTrackingPoint {
-  int id;
-  String sessionId;
-  double latitude;
-  double longitude;
-  DateTime recordedAt;
-  bool isSynced;
+  Id id = Isar.autoIncrement;
+
+  late String sessionId;
+  late double latitude;
+  late double longitude;
+  late DateTime recordedAt;
+
+  @Index()
+  bool isSynced = false;
 
   IsarTrackingPoint({
-    required this.id,
     required this.sessionId,
     required this.latitude,
     required this.longitude,
@@ -75,20 +88,26 @@ class IsarTrackingPoint {
   }
 }
 
+@collection
 class IsarSalesOrder {
-  int id;
-  String clientUuid;
-  int sequence;
-  String orderNumber;
-  String customerId;
-  double totalAmount;
-  String status;
-  bool isOfflineCaptured;
-  bool isSynced;
-  DateTime createdAt;
+  Id id = Isar.autoIncrement;
+
+  @Index()
+  late String clientUuid;
+
+  late int sequence;
+  late String orderNumber;
+  late String customerId;
+  late double totalAmount;
+  late String status;
+  late bool isOfflineCaptured;
+  
+  @Index()
+  bool isSynced = false;
+  
+  DateTime? createdAt;
 
   IsarSalesOrder({
-    required this.id,
     required this.clientUuid,
     required this.sequence,
     required this.orderNumber,
@@ -113,19 +132,25 @@ class IsarSalesOrder {
   }
 }
 
+@collection
 class IsarMerchObservation {
-  int id;
-  String clientUuid;
-  int sequence;
-  String customerId;
-  double mslComplianceScore;
-  double shareOfShelfPercentage;
+  Id id = Isar.autoIncrement;
+
+  @Index()
+  late String clientUuid;
+
+  late int sequence;
+  late String customerId;
+  late double mslComplianceScore;
+  late double shareOfShelfPercentage;
   String? evidencePhotoUrl;
-  bool isSynced;
-  DateTime createdAt;
+  
+  @Index()
+  bool isSynced = false;
+  
+  DateTime? createdAt;
 
   IsarMerchObservation({
-    required this.id,
     required this.clientUuid,
     required this.sequence,
     required this.customerId,

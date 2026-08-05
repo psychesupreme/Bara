@@ -35,7 +35,6 @@ class _MerchandisingScreenState extends State<MerchandisingScreen> {
 
   void _saveObservation() {
     final observation = IsarMerchObservation(
-      id: DateTime.now().millisecondsSinceEpoch % 10000,
       clientUuid: 'MERCH-${DateTime.now().millisecondsSinceEpoch}',
       sequence: 1,
       customerId: widget.customerId,

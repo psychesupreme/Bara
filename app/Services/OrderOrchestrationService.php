@@ -128,7 +128,9 @@ class OrderOrchestrationService
         if ($newStatus === 'approved') {
             $extension = CustomerOutletExtension::where('customer_id', $order->customer_id)->first();
             if ($extension && $extension->credit_limit > 0) {
-                $currentBalance = $extension->outstanding_balance ?? 0.0;
+                $currentBalance = \App\Models\SalesOrder::where('customer_id', $order->customer_id)
+                    ->whereNotIn('status', ['cancelled', 'closed', 'rejected'])
+                    ->sum('total_amount');
                 if (($currentBalance + $order->total_amount) > $extension->credit_limit) {
                     throw new InvalidArgumentException("Order total KES {$order->total_amount} exceeds customer credit limit KES {$extension->credit_limit}.");
                 }

@@ -38,8 +38,8 @@ class VerificationEvent extends Model
 
     protected $casts = [
         'verified_at' => 'datetime',
-        'latitude' => 'float',
-        'longitude' => 'float',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
         'gps_accuracy_meters' => 'float',
         'distance_to_target_meters' => 'float',
         'is_geofence_valid' => 'boolean',

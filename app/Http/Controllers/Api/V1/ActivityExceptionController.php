@@ -63,7 +63,10 @@ class ActivityExceptionController extends Controller
                 'outlet_name' => 'nullable|string',
             ]);
 
-            $user = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'Central Field Rep']);
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
+            }
             $activity = null;
 
             if (!empty($validated['activity_id'])) {
@@ -102,7 +105,7 @@ class ActivityExceptionController extends Controller
         }
     }
 
-    public function approve(Request $request, mixed $id): mixed
+    public function approve(Request $request, string $id): mixed
     {
         if (!Schema::hasTable('activity_exceptions')) {
             if ($request->header('X-Inertia')) {
@@ -117,39 +120,22 @@ class ActivityExceptionController extends Controller
         try {
             $notes = $request->input('notes', 'Approved via Web Admin Supervisory Queue');
 
-            $exception = null;
+            $exception = ActivityException::where('id', $id)
+                ->orWhere('client_uuid', $id)
+                ->first();
 
-            if ($id instanceof ActivityException) {
-                $exception = $id;
-            } else {
-                $exception = ActivityException::where('id', $id)
-                    ->orWhere('client_uuid', $id)
-                    ->first();
-
-                if (!$exception) {
-                    $defaultActivity = Activity::first() ?? Activity::create([
-                        'client_uuid' => (string) Str::uuid(),
-                        'sequence' => 1,
-                        'reference_no' => 'ACT-EXP-' . rand(100, 999),
-                        'activity_type' => 'visit',
-                        'title' => 'Visit Exception: Sarit Center Mart',
-                        'status' => 'exception',
-                        'is_offline_captured' => true,
-                    ]);
-
-                    $exception = ActivityException::latest()->first() ?? ActivityException::create([
-                        'client_uuid' => (string) Str::uuid(),
-                        'activity_id' => $defaultActivity->id,
-                        'sequence' => 1,
-                        'user_id' => $request->user()?->id ?? 1,
-                        'exception_type' => 'credit_override',
-                        'reason' => 'Supervisory Credit Limit Override',
-                        'status' => 'pending',
-                    ]);
+            if (!$exception) {
+                if ($request->header('X-Inertia')) {
+                    return redirect()->back()->withErrors(['message' => 'Exception not found.']);
                 }
+                return response()->json(['success' => false, 'message' => 'Exception not found.'], 404);
             }
 
-            $reviewer = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'System Supervisor']);
+            $reviewer = $request->user();
+            if (!$reviewer) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
+            }
+
             $approved = $this->exceptionService->approveException($exception, $reviewer, $notes);
 
             if ($request->header('X-Inertia')) {
@@ -171,7 +157,7 @@ class ActivityExceptionController extends Controller
         }
     }
 
-    public function reject(Request $request, mixed $id): mixed
+    public function reject(Request $request, string $id): mixed
     {
         if (!Schema::hasTable('activity_exceptions')) {
             if ($request->header('X-Inertia')) {
@@ -186,39 +172,22 @@ class ActivityExceptionController extends Controller
         try {
             $notes = $request->input('notes', 'Rejected via Web Admin Supervisory Queue');
 
-            $exception = null;
+            $exception = ActivityException::where('id', $id)
+                ->orWhere('client_uuid', $id)
+                ->first();
 
-            if ($id instanceof ActivityException) {
-                $exception = $id;
-            } else {
-                $exception = ActivityException::where('id', $id)
-                    ->orWhere('client_uuid', $id)
-                    ->first();
-
-                if (!$exception) {
-                    $defaultActivity = Activity::first() ?? Activity::create([
-                        'client_uuid' => (string) Str::uuid(),
-                        'sequence' => 1,
-                        'reference_no' => 'ACT-EXP-' . rand(100, 999),
-                        'activity_type' => 'visit',
-                        'title' => 'Visit Exception: Sarit Center Mart',
-                        'status' => 'exception',
-                        'is_offline_captured' => true,
-                    ]);
-
-                    $exception = ActivityException::latest()->first() ?? ActivityException::create([
-                        'client_uuid' => (string) Str::uuid(),
-                        'activity_id' => $defaultActivity->id,
-                        'sequence' => 1,
-                        'user_id' => $request->user()?->id ?? 1,
-                        'exception_type' => 'credit_override',
-                        'reason' => 'Supervisory Credit Limit Override',
-                        'status' => 'pending',
-                    ]);
+            if (!$exception) {
+                if ($request->header('X-Inertia')) {
+                    return redirect()->back()->withErrors(['message' => 'Exception not found.']);
                 }
+                return response()->json(['success' => false, 'message' => 'Exception not found.'], 404);
             }
 
-            $reviewer = $request->user() ?? User::first() ?? new User(['id' => 1, 'name' => 'System Supervisor']);
+            $reviewer = $request->user();
+            if (!$reviewer) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
+            }
+
             $rejected = $this->exceptionService->rejectException($exception, $reviewer, $notes);
 
             if ($request->header('X-Inertia')) {

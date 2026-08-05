@@ -7,6 +7,17 @@ import '../config/api_config.dart';
 import '../models/isar_models.dart';
 
 class SyncManager {
+  static SyncManager? _instance;
+  static SyncManager get instance => _instance!;
+  static void initialize({required String authToken, String? baseUrl, String? tenantHeader}) {
+    _instance = SyncManager(
+      authToken: authToken,
+      baseUrl: baseUrl,
+      tenantHeader: tenantHeader,
+    );
+  }
+  static bool get isInitialized => _instance != null;
+
   final String baseUrl;
   final String authToken;
   final String tenantHeader;
@@ -92,7 +103,6 @@ class SyncManager {
       } else if (uuid.isNotEmpty) {
         // Insert new record pulled from server
         localActivities.add(IsarActivity(
-          id: localActivities.length + 1,
           clientUuid: uuid,
           sequence: serverSeq,
           referenceNo: serverAct['reference_no'] ?? 'ACT-PULL-00',
@@ -129,19 +139,12 @@ class SyncManager {
         handlePushResponse(data);
         return true;
       }
-    } catch (_) {}
-
-    // Mark local un-synced items as synced for demo
-    for (var a in localActivities) {
-      a.isSynced = true;
+    } catch (e) {
+      // Network failure — do NOT mark items as synced
+      // They remain in queue for retry on next pushOfflineBatch() call
+      return false;
     }
-    for (var o in localSalesOrders) {
-      o.isSynced = true;
-    }
-    for (var m in localMerchObservations) {
-      m.isSynced = true;
-    }
-    return true;
+    return false;
   }
 
   /// Execute Pull Delta Updates HTTP request
@@ -161,7 +164,9 @@ class SyncManager {
         handlePullDeltasResponse(data);
         return true;
       }
-    } catch (_) {}
-    return true;
+    } catch (e) {
+      return false;
+    }
+    return false;
   }
 }

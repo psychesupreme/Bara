@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../services/sync_manager.dart';
 import 'journey_plan_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -34,14 +35,19 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode({
           'email': email,
           'password': password,
-          'device_name': 'Physical_Android_M2101K7BG',
+          // Note: dynamic device info should be used here, but we can't add device_info_plus dependency in this sprint
+          'device_name': 'bara_android_${DateTime.now().millisecondsSinceEpoch}',
         }),
       ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final String token = data['token'] ?? 'sanctum-mock-token-rep1';
-        final String userName = data['user']?['name'] ?? 'Nairobi Field Rep 1';
+        final String? token = data['token'];
+        if (token == null || token.isEmpty) {
+            setState(() => _errorMessage = 'Server returned invalid token.');
+            return;
+        }
+        final String userName = data['user']?['name'] ?? email.split('@').first;
 
         // Persist token and tenant locally
         final prefs = await SharedPreferences.getInstance();
@@ -50,35 +56,44 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('user_email', email);
         await prefs.setString('user_name', userName);
 
+        SyncManager.initialize(authToken: token);
+
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => JourneyPlanScreen(token: token, userName: userName)),
         );
       } else {
-        // Fallback for offline/local simulation
+        // Check for cached credentials for offline login
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', 'sanctum-mock-token-rep1');
-        await prefs.setString('tenant_id', ApiConfig.defaultTenant);
-        await prefs.setString('user_email', email);
-        await prefs.setString('user_name', 'Nairobi Field Rep 1 (Offline Session)');
-
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const JourneyPlanScreen(token: 'sanctum-mock-token-rep1', userName: 'Nairobi Field Rep 1')),
-        );
+        final cachedToken = prefs.getString('auth_token');
+        final cachedEmail = prefs.getString('user_email');
+        
+        if (cachedToken != null && cachedToken.isNotEmpty && cachedEmail == email) {
+            // Offline login with previously authenticated credentials
+            final cachedName = prefs.getString('user_name') ?? 'Offline User';
+            if (!mounted) return;
+            Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => JourneyPlanScreen(token: cachedToken, userName: '$cachedName (Offline)')),
+            );
+        } else {
+            setState(() => _errorMessage = 'Authentication failed (HTTP ${response.statusCode}). No cached credentials available for offline login.');
+        }
       }
     } catch (e) {
-      // Offline fallback login for field resilience
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', 'sanctum-mock-token-rep1');
-      await prefs.setString('tenant_id', ApiConfig.defaultTenant);
-      await prefs.setString('user_email', email);
-      await prefs.setString('user_name', 'Nairobi Field Rep 1 (Offline Session)');
-
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const JourneyPlanScreen(token: 'sanctum-mock-token-rep1', userName: 'Nairobi Field Rep 1')),
-      );
+        // Offline fallback — only allow if previously authenticated
+        final prefs = await SharedPreferences.getInstance();
+        final cachedToken = prefs.getString('auth_token');
+        final cachedEmail = prefs.getString('user_email');
+        
+        if (cachedToken != null && cachedToken.isNotEmpty && cachedEmail == email) {
+            final cachedName = prefs.getString('user_name') ?? 'Offline User';
+            if (!mounted) return;
+            Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => JourneyPlanScreen(token: cachedToken, userName: '$cachedName (Offline)')),
+            );
+        } else {
+            setState(() => _errorMessage = 'Network error. No cached credentials available. Please connect to the server to log in for the first time.');
+        }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -105,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.4),
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -139,9 +154,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.15),
+                    color: Colors.red.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                   ),
                   child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
                 ),

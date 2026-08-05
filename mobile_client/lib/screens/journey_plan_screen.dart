@@ -87,13 +87,23 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
   @override
   void initState() {
     super.initState();
-    _syncManager = SyncManager(
-      baseUrl: ApiConfig.baseUrl,
-      authToken: widget.token,
-      tenantHeader: ApiConfig.defaultTenant,
-    );
+    if (!SyncManager.isInitialized) {
+        SyncManager.initialize(authToken: widget.token);
+    }
+    _syncManager = SyncManager.instance;
     _adapter = FieldOperationsAdapter(syncManager: _syncManager);
     _fetchRealTimeLocation();
+  }
+
+  void _handleGpsUnavailable() {
+    setState(() {
+      _statusMessage = 'GPS unavailable. Provisional check-in required for all outlets.';
+      _isLocating = false;
+      _currentPosition = null;
+      for (var outlet in _outlets) {
+        outlet['distanceMeters'] = 9999;
+      }
+    });
   }
 
   String _formatDistance(int? distanceMeters) {
@@ -111,11 +121,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        setState(() {
-          _statusMessage = 'Location services disabled. Using Nairobi Center (-1.28333, 36.81667)';
-          _isLocating = false;
-        });
-        _updateDistances(-1.28333, 36.81667);
+        _handleGpsUnavailable();
         return;
       }
 
@@ -123,21 +129,13 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          setState(() {
-            _statusMessage = 'Location permission denied by user. Calculated against Nairobi Center.';
-            _isLocating = false;
-          });
-          _updateDistances(-1.28333, 36.81667);
+          _handleGpsUnavailable();
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _statusMessage = 'Location permission permanently denied. Calculated against Nairobi Center.';
-          _isLocating = false;
-        });
-        _updateDistances(-1.28333, 36.81667);
+        _handleGpsUnavailable();
         return;
       }
 
@@ -154,11 +152,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
 
       _updateDistances(position.latitude, position.longitude);
     } catch (e) {
-      setState(() {
-        _statusMessage = 'GPS Timeout (10s). Calculated against Nairobi CBD Center.';
-        _isLocating = false;
-      });
-      _updateDistances(-1.28333, 36.81667);
+      _handleGpsUnavailable();
     }
   }
 
@@ -268,7 +262,16 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
           'outlet_name': outlet['name'],
         }),
       );
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Network error: ${e.toString().substring(0, (e.toString().length > 80) ? 80 : e.toString().length)}. Action queued offline.'),
+            backgroundColor: const Color(0xFFF59E0B),
+          ),
+        );
+      }
+    }
 
     if (!mounted) return;
 
@@ -331,7 +334,16 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
           'longitude': liveLng,
         }),
       );
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Network error: ${e.toString().substring(0, (e.toString().length > 80) ? 80 : e.toString().length)}. Action queued offline.'),
+            backgroundColor: const Color(0xFFF59E0B),
+          ),
+        );
+      }
+    }
 
     if (!mounted) return;
 
@@ -366,18 +378,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     });
   }
 
-  Widget _infoRow(String label, String val, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-          Text(val, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
-        ],
-      ),
-    );
-  }
+
 
   void _checkoutOutlet(Map<String, dynamic> outlet) {
     final String outletId = outlet['id'] as String;

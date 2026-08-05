@@ -107,6 +107,7 @@
 
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
+import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import L from 'leaflet';
 
@@ -322,10 +323,20 @@ onMounted(() => {
   // Fallback Polling Guard (5-second HTTP polling fallback so UI never freezes)
   pollingInterval = setInterval(() => {
     isPollingFallback.value = true;
+    router.reload({ only: ['outlets'], preserveScroll: true, preserveState: true });
   }, 5000);
 });
 
 onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval);
+  if (typeof window !== 'undefined' && window.Echo) {
+      window.Echo.leave('telemetry-stream');
+      window.Echo.leave('dispatch-channel');
+      window.Echo.leave('exception-stream');
+  }
+  if (mapInstance) {
+      mapInstance.remove();
+      mapInstance = null;
+  }
 });
 </script>

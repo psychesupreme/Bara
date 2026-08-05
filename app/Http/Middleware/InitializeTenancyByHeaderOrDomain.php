@@ -52,8 +52,13 @@ class InitializeTenancyByHeaderOrDomain extends IdentificationMiddleware
                     $this->tenancy->initialize($defaultTenant);
                 }
             }
+
+            if (!$this->tenancy->initialized && !config('app.single_tenant_mode', false) && !app()->environment('testing')) {
+                abort(403, 'Tenant scope required. Provide X-Tenant header or configure domain.');
+            }
         } catch (\Throwable $e) {
-            // Single-tenant or local SQLite execution fallback
+            \Illuminate\Support\Facades\Log::warning('Tenant resolution failed: ' . $e->getMessage());
+            abort(403, 'Unable to resolve tenant scope. Access denied.');
         }
 
         return $next($request);

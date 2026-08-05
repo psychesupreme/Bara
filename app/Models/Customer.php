@@ -31,8 +31,8 @@ class Customer extends Model
     ];
 
     protected $casts = [
-        'latitude' => 'float',
-        'longitude' => 'float',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
         'is_active' => 'boolean',
     ];
 
