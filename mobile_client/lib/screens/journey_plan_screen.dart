@@ -36,8 +36,11 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'id': 'CUST-KASARANI-LIVE',
       'name': 'Kasarani Live Test Store',
       'territory': 'Kasarani Zone',
+      'channel': 'Key Account',
       'lat': -1.2002000,
       'lng': 36.8344000,
+      'creditLimit': 150000.0,
+      'balance': 125000.0,
       'status': 'Pending Visit',
       'distanceMeters': null,
       'isProvisional': false,
@@ -46,8 +49,11 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'id': 'CUST-NAIVAS-CBD',
       'name': 'Naivas Supermarket CBD Branch',
       'territory': 'CBD Zone',
+      'channel': 'Key Account Tier 1',
       'lat': -1.2833300,
       'lng': 36.8166700,
+      'creditLimit': 500000.0,
+      'balance': 125000.0,
       'status': 'Pending Visit',
       'distanceMeters': null,
       'isProvisional': false,
@@ -56,8 +62,11 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'id': 'CUST-SARIT-MART',
       'name': 'Sarit Center Mart',
       'territory': 'Westlands Zone',
+      'channel': 'Modern Trade',
       'lat': -1.2612000,
       'lng': 36.8041000,
+      'creditLimit': 200000.0,
+      'balance': 190000.0,
       'status': 'Pending Visit',
       'distanceMeters': null,
       'isProvisional': false,
@@ -66,8 +75,11 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'id': 'CUST-YAYA-MINI',
       'name': 'Yaya Center MiniMart',
       'territory': 'Kilimani Zone',
+      'channel': 'Convenience',
       'lat': -1.2917000,
       'lng': 36.7865000,
+      'creditLimit': 100000.0,
+      'balance': 45000.0,
       'status': 'Pending Visit',
       'distanceMeters': null,
       'isProvisional': false,
@@ -76,8 +88,11 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       'id': 'CUST-CBD-CONV',
       'name': 'CBD Convenience Store',
       'territory': 'CBD Zone',
+      'channel': 'Retail',
       'lat': -1.2845000,
       'lng': 36.8210000,
+      'creditLimit': 80000.0,
+      'balance': 20000.0,
       'status': 'Pending Visit',
       'distanceMeters': null,
       'isProvisional': false,
@@ -99,11 +114,10 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     setState(() {
       _statusMessage = 'GPS unavailable. Provisional check-in required for all outlets.';
       _isLocating = false;
-      _currentPosition = null;
-      for (var outlet in _outlets) {
-        outlet['distanceMeters'] = 9999;
-      }
     });
+    for (var outlet in _outlets) {
+      outlet['distanceMeters'] = 9999;
+    }
   }
 
   String _formatDistance(int? distanceMeters) {
@@ -170,7 +184,6 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     });
   }
 
-  /// PRD Section 4.5 Human-Readable Rule Failure Modal with "Request Manager Override"
   void _showGeofenceRuleFailureModal(Map<String, dynamic> outlet, int? distance) {
     showDialog(
       context: context,
@@ -244,9 +257,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
     );
   }
 
-  /// Request Manager Override & Initiate Provisional Check-In
   Future<void> _requestGeofenceManagerOverride(Map<String, dynamic> outlet) async {
-    // POST exception to backend /api/v1/exceptions
     try {
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/exceptions'),
@@ -266,7 +277,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Network error: ${e.toString().substring(0, (e.toString().length > 80) ? 80 : e.toString().length)}. Action queued offline.'),
+            content: Text('Network warning: ${e.toString().substring(0, (e.toString().length > 60) ? 60 : e.toString().length)}. Exception queued offline.'),
             backgroundColor: const Color(0xFFF59E0B),
           ),
         );
@@ -338,7 +349,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Network error: ${e.toString().substring(0, (e.toString().length > 80) ? 80 : e.toString().length)}. Action queued offline.'),
+            content: Text('Network warning: Check-in saved offline.'),
             backgroundColor: const Color(0xFFF59E0B),
           ),
         );
@@ -377,8 +388,6 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
       });
     });
   }
-
-
 
   void _checkoutOutlet(Map<String, dynamic> outlet) {
     final String outletId = outlet['id'] as String;
@@ -484,15 +493,43 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final int pendingSyncCount = _syncManager.localActivities.where((a) => !a.isSynced).length +
+        _syncManager.localSalesOrders.where((o) => !o.isSynced).length +
+        _syncManager.localMerchObservations.where((m) => !m.isSynced).length;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F19),
       appBar: AppBar(
-        title: const Text('My Work Hub — SFA Execution'),
+        title: const Text('My Work Hub — SFA Lean UX', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F172A),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.sync, color: Colors.cyanAccent),
-            tooltip: 'Visual Sync Center',
+          // Visual Offline Sync Counter Badge Action Button
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              backgroundColor: pendingSyncCount > 0
+                  ? Colors.amber.withValues(alpha: 0.2)
+                  : const Color(0xFF10B981).withValues(alpha: 0.15),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: pendingSyncCount > 0 ? Colors.amberAccent : const Color(0xFF34D399),
+                ),
+              ),
+            ),
+            icon: Icon(
+              Icons.sync,
+              color: pendingSyncCount > 0 ? Colors.amberAccent : const Color(0xFF34D399),
+              size: 16,
+            ),
+            label: Text(
+              pendingSyncCount > 0 ? 'Sync ($pendingSyncCount)' : '✓ Synced',
+              style: TextStyle(
+                color: pendingSyncCount > 0 ? Colors.amberAccent : const Color(0xFF34D399),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             onPressed: () {
               Navigator.push(
                 context,
@@ -502,9 +539,10 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                     syncManager: _syncManager,
                   ),
                 ),
-              );
+              ).then((_) => setState(() {}));
             },
           ),
+          const SizedBox(width: 8),
           IconButton(
             icon: _isLocating
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -518,21 +556,27 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Rep Profile & Shift Status Header Card
+            // Rep Profile & Shift Status Header Card with Offline Sync Stats
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white10),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white12),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+                ],
               ),
               child: Row(
                 children: [
                   CircleAvatar(
+                    radius: 22,
                     backgroundColor: const Color(0xFF6366F1),
                     child: Text(
                       widget.userName.isNotEmpty ? widget.userName[0] : 'R',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -545,14 +589,28 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                    ),
-                    child: const Text('On Shift', style: TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                        ),
+                        child: const Text('On Shift', style: TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        pendingSyncCount > 0 ? '$pendingSyncCount Queue' : 'Sync: 200 OK',
+                        style: TextStyle(
+                          color: pendingSyncCount > 0 ? Colors.amberAccent : Colors.cyanAccent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -565,20 +623,28 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.indigo.withValues(alpha: 0.3)),
               ),
-              child: Text(
-                _statusMessage,
-                style: const TextStyle(color: Colors.indigoAccent, fontSize: 12, fontWeight: FontWeight.w500),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.indigoAccent, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _statusMessage,
+                      style: const TextStyle(color: Colors.indigoAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            const Text('Assigned Outlet Call Cycle', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            const Text('Assigned Outlet Call Cycle', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
             const SizedBox(height: 12),
 
-            // Outlets List with 6-Step Guided Call Sequence
+            // Outlets List with Lean UX Cards, Credit Alerts, & Guided Call Steps
             Expanded(
               child: ListView.builder(
                 itemCount: _outlets.length,
@@ -592,27 +658,41 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                   final bool isInRange = distance != null && distance <= 1500;
                   final int activeStep = _outletActiveSteps[outletId] ?? 1;
 
+                  // Credit Utilization Data & Alert Badge
+                  final double creditLimit = (outlet['creditLimit'] as num?)?.toDouble() ?? 150000.0;
+                  final double balance = (outlet['balance'] as num?)?.toDouble() ?? 0.0;
+                  final double utilization = creditLimit > 0 ? (balance / creditLimit) * 100.0 : 0.0;
+                  final String channel = outlet['channel'] as String? ?? 'General Retail';
+                  final bool isHighCreditRisk = utilization > 80.0;
+
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 14),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isCheckedIn
-                          ? Colors.green.withValues(alpha: 0.1)
-                          : (isCompleted ? Colors.green.withValues(alpha: 0.05) : const Color(0xFF1E293B)),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isCheckedIn ? Colors.green : (isCompleted ? Colors.greenAccent : Colors.white10)),
+                          ? Colors.green.withValues(alpha: 0.08)
+                          : (isCompleted ? Colors.green.withValues(alpha: 0.04) : const Color(0xFF1E293B)),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isCheckedIn
+                            ? Colors.green
+                            : (isCompleted ? Colors.greenAccent.withValues(alpha: 0.6) : Colors.white12),
+                        width: isCheckedIn ? 1.5 : 1,
+                      ),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Outlet Header Row
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
                               isCheckedIn ? Icons.check_circle : (isCompleted ? Icons.verified : Icons.storefront),
                               color: isCheckedIn ? Colors.greenAccent : (isCompleted ? Colors.greenAccent : (isInRange ? Colors.indigoAccent : Colors.grey)),
-                              size: 32,
+                              size: 30,
                             ),
-                            const SizedBox(width: 14),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,7 +702,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                       Expanded(
                                         child: Text(
                                           outlet['name'] as String,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                                         ),
                                       ),
                                       if (isCompleted)
@@ -648,23 +728,106 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    '${outlet['territory']} • Lat: ${outlet['lat']}, Lng: ${outlet['lng']}',
-                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Proximity: ${_formatDistance(distance)}',
-                                    style: TextStyle(
-                                      color: isInRange ? Colors.greenAccent : Colors.amberAccent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.indigo.withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(channel, style: const TextStyle(color: Colors.indigoAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        outlet['territory'] as String,
+                                        style: const TextStyle(color: Colors.grey, fontSize: 11),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // PRD Credit Utilization Alert Badge
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isHighCreditRisk
+                                ? const Color(0xFFF43F5E).withValues(alpha: 0.1)
+                                : const Color(0xFF10B981).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isHighCreditRisk
+                                  ? const Color(0xFFF43F5E).withValues(alpha: 0.3)
+                                  : const Color(0xFF10B981).withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        isHighCreditRisk ? Icons.warning_amber_rounded : Icons.credit_score,
+                                        color: isHighCreditRisk ? const Color(0xFFFB7185) : const Color(0xFF34D399),
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        isHighCreditRisk
+                                            ? '⚠️ Credit Risk Alert: ${utilization.toStringAsFixed(0)}% Utilized'
+                                            : 'Credit Status: ${utilization.toStringAsFixed(0)}% Utilized',
+                                        style: TextStyle(
+                                          color: isHighCreditRisk ? const Color(0xFFFB7185) : const Color(0xFF34D399),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    'KES ${balance.toStringAsFixed(0)} / ${creditLimit.toStringAsFixed(0)}',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              // Credit Utilization Progress Bar
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: (utilization / 100.0).clamp(0.0, 1.0),
+                                  minHeight: 4,
+                                  backgroundColor: Colors.white10,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    isHighCreditRisk ? const Color(0xFFF43F5E) : const Color(0xFF10B981),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Proximity & Action Button Bar
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'GPS Proximity: ${_formatDistance(distance)}',
+                              style: TextStyle(
+                                color: isInRange ? Colors.greenAccent : Colors.amberAccent,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             ElevatedButton(
                               onPressed: (isCheckedIn || isCompleted)
                                   ? null
@@ -676,6 +839,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                                     ? Colors.green[800]
                                     : (isCompleted ? Colors.grey[800] : (isInRange ? const Color(0xFF6366F1) : const Color(0xFF334155))),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               ),
                               child: Text(
                                 isCheckedIn
@@ -693,7 +857,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                           ],
                         ),
 
-                        // PRD Section 7.7 6-Step Guided Call Sequence Grid
+                        // Guided Call Sequence
                         if (isCheckedIn) ...[
                           const SizedBox(height: 14),
                           const Divider(color: Colors.white10),
@@ -701,126 +865,30 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                'Guided Call Execution Sequence',
-                                style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              Text(
-                                'Step $activeStep of 6',
-                                style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
+                              const Text('Guided Call Execution', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                              Text('Step $activeStep of 6', style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                             ],
                           ),
                           const SizedBox(height: 10),
-
                           Column(
                             children: [
                               Row(
                                 children: [
-                                  // Step 2: Customer 360 Profile
-                                  Expanded(
-                                    child: _actionCard(
-                                      title: '2. Customer 360',
-                                      subtitle: 'Commercial Profile',
-                                      color: const Color(0xFF6366F1),
-                                      isActive: activeStep == 2,
-                                      onTap: () => _showCustomer360Modal(outlet),
-                                    ),
-                                  ),
+                                  Expanded(child: _actionCard(title: '2. Customer 360', subtitle: 'Commercial', color: const Color(0xFF6366F1), isActive: activeStep == 2, onTap: () => _showCustomer360Modal(outlet))),
                                   const SizedBox(width: 8),
-
-                                  // Step 3: Merchandising & MSL Audit
-                                  Expanded(
-                                    child: _actionCard(
-                                      title: '3. Merchandising',
-                                      subtitle: 'MSL & SOS Audit',
-                                      color: const Color(0xFFEC4899),
-                                      isActive: activeStep == 3,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => MerchandisingScreen(
-                                              token: widget.token,
-                                              customerId: outlet['id'] as String,
-                                              outletName: outlet['name'] as String,
-                                            ),
-                                          ),
-                                        ).then((_) {
-                                          setState(() => _outletActiveSteps[outletId] = 4);
-                                        });
-                                      },
-                                    ),
-                                  ),
+                                  Expanded(child: _actionCard(title: '3. Merchandising', subtitle: 'MSL Audit', color: const Color(0xFFEC4899), isActive: activeStep == 3, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MerchandisingScreen(token: widget.token, customerId: outlet['id'], outletName: outlet['name']))).then((_) => setState(() => _outletActiveSteps[outletId] = 4)))),
                                 ],
                               ),
                               const SizedBox(height: 8),
-
                               Row(
                                 children: [
-                                  // Step 4: 7-Tier Price Waterfall Order Entry
-                                  Expanded(
-                                    child: _actionCard(
-                                      title: '4. Order Entry',
-                                      subtitle: '7-Tier Waterfall Cart',
-                                      color: const Color(0xFF3B82F6),
-                                      isActive: activeStep == 4,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => OrderEntryScreen(
-                                              token: widget.token,
-                                              customerId: outlet['id'] as String,
-                                              outletName: outlet['name'] as String,
-                                            ),
-                                          ),
-                                        ).then((_) {
-                                          setState(() => _outletActiveSteps[outletId] = 5);
-                                        });
-                                      },
-                                    ),
-                                  ),
+                                  Expanded(child: _actionCard(title: '4. Order Entry', subtitle: '7-Tier Price', color: const Color(0xFF3B82F6), isActive: activeStep == 4, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderEntryScreen(token: widget.token, customerId: outlet['id'], outletName: outlet['name']))).then((_) => setState(() => _outletActiveSteps[outletId] = 5)))),
                                   const SizedBox(width: 8),
-
-                                  // Step 5: Collection & M-Pesa STK Push
-                                  Expanded(
-                                    child: _actionCard(
-                                      title: '5. Collection',
-                                      subtitle: 'M-Pesa STK / Cash',
-                                      color: const Color(0xFF10B981),
-                                      isActive: activeStep == 5,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => CollectionScreen(
-                                              token: widget.token,
-                                              customerId: outlet['id'] as String,
-                                              outletName: outlet['name'] as String,
-                                            ),
-                                          ),
-                                        ).then((_) {
-                                          setState(() => _outletActiveSteps[outletId] = 6);
-                                        });
-                                      },
-                                    ),
-                                  ),
+                                  Expanded(child: _actionCard(title: '5. Collection', subtitle: 'M-Pesa STK', color: const Color(0xFF10B981), isActive: activeStep == 5, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CollectionScreen(token: widget.token, customerId: outlet['id'], outletName: outlet['name']))).then((_) => setState(() => _outletActiveSteps[outletId] = 6)))),
                                 ],
                               ),
                               const SizedBox(height: 8),
-
-                              // Step 6: Complete Visit & Check-Out Summary
-                              SizedBox(
-                                width: double.infinity,
-                                child: _actionCard(
-                                  title: '6. Complete Visit & Check-Out',
-                                  subtitle: 'End Call & Lock Outlet Record',
-                                  color: Colors.amber[700]!,
-                                  isActive: activeStep == 6,
-                                  onTap: () => _checkoutOutlet(outlet),
-                                ),
-                              ),
+                              SizedBox(width: double.infinity, child: _actionCard(title: '6. Complete Visit', subtitle: 'Lock Record', color: Colors.amber[700]!, isActive: activeStep == 6, onTap: () => _checkoutOutlet(outlet))),
                             ],
                           ),
                         ],
@@ -860,8 +928,7 @@ class _JourneyPlanScreenState extends State<JourneyPlanScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-                if (isActive)
-                  Icon(Icons.play_circle_fill, color: color, size: 14),
+                if (isActive) Icon(Icons.play_circle_fill, color: color, size: 14),
               ],
             ),
             const SizedBox(height: 2),
